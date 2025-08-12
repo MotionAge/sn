@@ -37,9 +37,10 @@ export default function AdminSidebar() {
     { name: "Blogs", icon: FileText, href: "/admin/blogs" },
     { name: "Gallery", icon: ImageIcon, href: "/admin/gallery" },
     { name: "Global Presence", icon: Globe, href: "/admin/global-presence" },
-    { name: "Policy & Team", icon: FileCode, href: "/admin/policy-team" },
+    { name: "Settings", icon: Settings, href: "/admin/settings" },
     { name: "FAQs", icon: FileText, href: "/admin/faqs" },
     { name: "Certificate Logs", icon: FileText, href: "/admin/certificate-logs" },
+    { name: "API Test", icon: FileCode, href: "/admin/test-api" },
     //{ name: "Settings", icon: Settings, href: "/admin/settings" },
   ]
 

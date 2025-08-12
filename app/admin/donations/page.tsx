@@ -1,93 +1,131 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Download, DollarSign, TrendingUp, Users, Receipt } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Search, Download, DollarSign, TrendingUp, Users, Receipt, AlertCircle } from "lucide-react"
+import { useDonations } from "@/hooks/use-api"
+import { apiClient } from "@/lib/api-client"
+import { toast } from "sonner"
+
+interface Donation {
+  id: string
+  donor_name: string
+  email?: string
+  amount: number
+  currency: string
+  project_id?: string
+  message?: string
+  created_at: string
+  updated_at: string
+}
 
 export default function DonationsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const { data: donations, loading, error, execute: fetchDonations } = useDonations<Donation[]>()
 
-  const donations = [
-    {
-      id: "D001",
-      donorName: "अनिल कुमार श्रेष्ठ",
-      email: "anil.shrestha@email.com",
-      amount: 5000,
-      currency: "NPR",
-      paymentMethod: "eSewa",
-      purpose: "Temple Construction",
-      date: "2024-01-15",
-      status: "Completed",
-      transactionId: "ESW123456789",
-      receiptGenerated: true,
-    },
-    {
-      id: "D002",
-      donorName: "सुनिता पौडेल",
-      email: "sunita.poudel@email.com",
-      amount: 2500,
-      currency: "NPR",
-      paymentMethod: "Khalti",
-      purpose: "Education Fund",
-      date: "2024-01-14",
-      status: "Completed",
-      transactionId: "KHT987654321",
-      receiptGenerated: true,
-    },
-    {
-      id: "D003",
-      donorName: "राजेश गुरुङ",
-      email: "rajesh.gurung@email.com",
-      amount: 1000,
-      currency: "NPR",
-      paymentMethod: "Bank Transfer",
-      purpose: "General Donation",
-      date: "2024-01-13",
-      status: "Pending",
-      transactionId: "BT456789123",
-      receiptGenerated: false,
-    },
-  ]
+  // Memoize fetchDonations to avoid unnecessary re-renders
+  const fetchDonationsCallback = useCallback(() => {
+    fetchDonations()
+  }, [fetchDonations])
 
-  const stats = [
-    { title: "Total Donations", value: "NPR 2,47,500", icon: DollarSign },
-    { title: "This Month", value: "NPR 45,000", icon: TrendingUp },
-    { title: "Total Donors", value: "156", icon: Users },
-    { title: "Pending", value: "NPR 8,500", icon: Receipt },
-  ]
+  useEffect(() => {
+    fetchDonationsCallback()
+  }, [fetchDonationsCallback])
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Completed":
-        return "bg-green-100 text-green-800"
-      case "Pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "Failed":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+  const handleDeleteDonation = async (id: string) => {
+    try {
+      const result = await apiClient.deleteDonation(id)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success("Donation deleted successfully")
+        fetchDonationsCallback() // Refresh the list
+      }
+    } catch (error) {
+      toast.error("Failed to delete donation")
     }
   }
 
-  const getPaymentMethodColor = (method: string) => {
-    switch (method) {
-      case "eSewa":
-        return "bg-green-100 text-green-800"
-      case "Khalti":
-        return "bg-purple-100 text-purple-800"
-      case "Bank Transfer":
-        return "bg-blue-100 text-blue-800"
-      case "Cash":
-        return "bg-gray-100 text-gray-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
+  const filteredDonations = donations?.filter(donation => {
+    const matchesSearch = donation.donor_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (donation.email && donation.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         donation.amount.toString().includes(searchTerm)
+    return matchesSearch
+  }) || []
+
+  const totalAmount = donations?.reduce((sum, d) => sum + d.amount, 0) || 0
+  const thisMonthAmount = donations?.filter(d => {
+    const donationDate = new Date(d.created_at)
+    const thisMonth = new Date()
+    return donationDate.getMonth() === thisMonth.getMonth() && 
+           donationDate.getFullYear() === thisMonth.getFullYear()
+  }).reduce((sum, d) => sum + d.amount, 0) || 0
+
+  const stats = [
+    { 
+      title: "Total Donations", 
+      value: `${donations?.[0]?.currency || "NPR"} ${totalAmount.toLocaleString()}`, 
+      icon: DollarSign 
+    },
+    { 
+      title: "This Month", 
+      value: `${donations?.[0]?.currency || "NPR"} ${thisMonthAmount.toLocaleString()}`, 
+      icon: TrendingUp 
+    },
+    { 
+      title: "Total Donors", 
+      value: donations ? new Set(donations.map(d => d.donor_name)).size.toString() : "0", 
+      icon: Users 
+    },
+    { 
+      title: "Total Donations", 
+      value: donations?.length?.toString() || "0", 
+      icon: Receipt 
+    },
+  ]
+
+  const getStatusColor = (donation: Donation) => {
+    // For now, all donations are considered completed
+    // In a real app, you'd have a status field
+    return "bg-green-100 text-green-800"
+  }
+
+  const getPaymentMethodColor = (donation: Donation) => {
+    // For now, default to a generic color
+    // In a real app, you'd have a payment_method field
+    return "bg-blue-100 text-blue-800"
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Failed to load donations: {error}
+          </AlertDescription>
+        </Alert>
+        <Button onClick={fetchDonations} variant="outline">
+          Retry
+        </Button>
+      </div>
+    )
   }
 
   return (
@@ -167,44 +205,97 @@ export default function DonationsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {donations.map((donation) => (
-                  <TableRow key={donation.id}>
-                    <TableCell className="font-medium">{donation.id}</TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{donation.donorName}</div>
-                        <div className="text-sm text-muted-foreground">{donation.email}</div>
-                        <div className="text-xs text-muted-foreground">{donation.date}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium">
-                        {donation.currency} {donation.amount.toLocaleString()}
-                      </div>
-                      <div className="text-xs text-muted-foreground">ID: {donation.transactionId}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getPaymentMethodColor(donation.paymentMethod)}>{donation.paymentMethod}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{donation.purpose}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(donation.status)}>{donation.status}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm">
-                          <Receipt className="h-3 w-3 mr-1" />
-                          Receipt
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          View
-                        </Button>
+                {loading ? (
+                  // Loading skeletons
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[80px]" />
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-[150px]" />
+                          <Skeleton className="h-3 w-[120px]" />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[100px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-6 w-[80px] rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[120px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-6 w-[80px] rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Skeleton className="h-8 w-[80px]" />
+                          <Skeleton className="h-8 w-[60px]" />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredDonations.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <div className="text-muted-foreground">
+                        {searchTerm 
+                          ? "No donations match your search" 
+                          : "No donations found"}
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredDonations.map((donation) => (
+                    <TableRow key={donation.id}>
+                      <TableCell className="font-medium">{donation.id}</TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{donation.donor_name}</div>
+                          <div className="text-sm text-muted-foreground">{donation.email || "No email"}</div>
+                          <div className="text-xs text-muted-foreground">{formatDate(donation.created_at)}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">
+                          {donation.currency} {donation.amount.toLocaleString()}
+                        </div>
+                        <div className="text-xs text-muted-foreground">ID: {donation.id}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getPaymentMethodColor(donation)}>Online</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{donation.message || "General Donation"}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(donation)}>Completed</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button variant="outline" size="sm">
+                            <Receipt className="h-3 w-3 mr-1" />
+                            Receipt
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            View
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDeleteDonation(donation.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

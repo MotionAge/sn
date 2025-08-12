@@ -1,59 +1,117 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Download, UserPlus, Award, Mail, Phone } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Search, Download, UserPlus, Award, Mail, Phone, AlertCircle } from "lucide-react"
+import { useMembers } from "@/hooks/use-api"
+import { apiClient } from "@/lib/api-client"
+import { toast } from "sonner"
+
+interface Member {
+  id: string
+  serial_number: string
+  full_name: string
+  email: string
+  phone: string
+  address: string
+  date_of_birth: string
+  membership_type: string
+  start_date: string
+  end_date?: string
+  is_active: boolean
+  referral_code?: string
+  created_at: string
+  updated_at: string
+}
 
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const { data: members, loading, error, execute: fetchMembers } = useMembers<Member[]>()
 
-  const members = [
-    {
-      id: "M001",
-      name: "राम बहादुर शर्मा",
-      email: "ram.sharma@email.com",
-      phone: "+977-9841234567",
-      membershipType: "Lifetime",
-      status: "Active",
-      joinDate: "2023-01-15",
-      expiryDate: "Lifetime",
-      location: "Kathmandu",
-    },
-    {
-      id: "M002",
-      name: "सीता देवी पौडेल",
-      email: "sita.poudel@email.com",
-      phone: "+977-9851234567",
-      membershipType: "Annual",
-      status: "Active",
-      joinDate: "2023-06-20",
-      expiryDate: "2024-06-20",
-      location: "Pokhara",
-    },
-    {
-      id: "M003",
-      name: "गीता राई",
-      email: "geeta.rai@email.com",
-      phone: "+977-9861234567",
-      membershipType: "Annual",
-      status: "Expired",
-      joinDate: "2022-03-10",
-      expiryDate: "2023-03-10",
-      location: "Chitwan",
-    },
-  ]
+  // Memoize fetchMembers to avoid unnecessary re-renders
+  const fetchMembersCallback = useCallback(() => {
+    fetchMembers()
+  }, [fetchMembers])
+
+  useEffect(() => {
+    fetchMembersCallback()
+  }, [fetchMembersCallback])
+
+  const handleDeleteMember = async (id: string) => {
+    try {
+      const result = await apiClient.deleteMember(id)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success("Member deleted successfully")
+        fetchMembersCallback() // Refresh the list
+      }
+    } catch (error) {
+      toast.error("Failed to delete member")
+    }
+  }
+
+  const getMemberStatus = (member: Member) => {
+    if (!member.is_active) {
+      return "Inactive"
+    }
+    if (member.membership_type === "lifetime") {
+      return "Active"
+    }
+    if (member.end_date) {
+      const endDate = new Date(member.end_date)
+      const today = new Date()
+      if (endDate < today) {
+        return "Expired"
+      }
+    }
+    return "Active"
+  }
+
+  const filteredMembers = members?.filter(member => {
+    const matchesSearch = member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         member.phone.includes(searchTerm) ||
+                         member.serial_number.includes(searchTerm)
+    const memberStatus = getMemberStatus(member)
+    const matchesStatus = statusFilter === "all" || memberStatus.toLowerCase() === statusFilter
+    return matchesSearch && matchesStatus
+  }) || []
 
   const stats = [
-    { title: "Total Members", value: "1,247", icon: UserPlus },
-    { title: "Active Members", value: "1,089", icon: Award },
-    { title: "New This Month", value: "23", icon: UserPlus },
-    { title: "Expired", value: "158", icon: Mail },
+    { 
+      title: "Total Members", 
+      value: members?.length?.toString() || "0", 
+      icon: UserPlus 
+    },
+    { 
+      title: "Active Members", 
+      value: members?.filter(m => getMemberStatus(m) === "Active").length?.toString() || "0", 
+      icon: Award 
+    },
+    { 
+      title: "New This Month", 
+      value: members?.filter(m => {
+        const joinDate = new Date(m.start_date)
+        const thisMonth = new Date()
+        return joinDate.getMonth() === thisMonth.getMonth() && 
+               joinDate.getFullYear() === thisMonth.getFullYear()
+      }).length?.toString() || "0", 
+      icon: UserPlus 
+    },
+    { 
+      title: "Expired", 
+      value: members?.filter(m => getMemberStatus(m) === "Expired").length?.toString() || "0", 
+      icon: Mail 
+    },
   ]
 
   const getStatusColor = (status: string) => {
@@ -62,11 +120,35 @@ export default function MembersPage() {
         return "bg-green-100 text-green-800"
       case "Expired":
         return "bg-red-100 text-red-800"
-      case "Pending":
-        return "bg-yellow-100 text-yellow-800"
+      case "Inactive":
+        return "bg-gray-100 text-gray-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Failed to load members: {error}
+          </AlertDescription>
+        </Alert>
+        <Button onClick={fetchMembers} variant="outline">
+          Retry
+        </Button>
+      </div>
+    )
   }
 
   return (
@@ -122,7 +204,7 @@ export default function MembersPage() {
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="expired">Expired</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline">
@@ -146,50 +228,117 @@ export default function MembersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {members.map((member) => (
-                  <TableRow key={member.id}>
-                    <TableCell className="font-medium">{member.id}</TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{member.name}</div>
-                        <div className="text-sm text-muted-foreground">Joined: {member.joinDate}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center text-sm">
-                          <Mail className="h-3 w-3 mr-1" />
-                          {member.email}
+                {loading ? (
+                  // Loading skeletons
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[80px]" />
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-[150px]" />
+                          <Skeleton className="h-3 w-[100px]" />
                         </div>
-                        <div className="flex items-center text-sm">
-                          <Phone className="h-3 w-3 mr-1" />
-                          {member.phone}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-[120px]" />
+                          <Skeleton className="h-4 w-[100px]" />
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{member.membershipType}</div>
-                        <div className="text-sm text-muted-foreground">Expires: {member.expiryDate}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(member.status)}>{member.status}</Badge>
-                    </TableCell>
-                    <TableCell>{member.location}</TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm">
-                          <Award className="h-3 w-3 mr-1" />
-                          Certificate
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          Edit
-                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-[80px]" />
+                          <Skeleton className="h-3 w-[100px]" />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-6 w-[80px] rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[100px]" />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Skeleton className="h-8 w-[80px]" />
+                          <Skeleton className="h-8 w-[60px]" />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredMembers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <div className="text-muted-foreground">
+                        {searchTerm || statusFilter !== "all" 
+                          ? "No members match your filters" 
+                          : "No members found"}
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredMembers.map((member) => {
+                    const memberStatus = getMemberStatus(member)
+                    return (
+                      <TableRow key={member.id}>
+                        <TableCell className="font-medium">{member.serial_number}</TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{member.full_name}</div>
+                            <div className="text-sm text-muted-foreground">Joined: {formatDate(member.start_date)}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="flex items-center text-sm">
+                              <Mail className="h-3 w-3 mr-1" />
+                              {member.email}
+                            </div>
+                            <div className="flex items-center text-sm">
+                              <Phone className="h-3 w-3 mr-1" />
+                              {member.phone}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{member.membership_type}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {member.membership_type === "lifetime" 
+                                ? "Lifetime" 
+                                : `Expires: ${member.end_date ? formatDate(member.end_date) : "N/A"}`
+                              }
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getStatusColor(memberStatus)}>{memberStatus}</Badge>
+                        </TableCell>
+                        <TableCell>{member.address}</TableCell>
+                        <TableCell>
+                          <div className="flex space-x-2">
+                            <Button variant="outline" size="sm">
+                              <Award className="h-3 w-3 mr-1" />
+                              Certificate
+                            </Button>
+                            <Button variant="outline" size="sm">
+                              Edit
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleDeleteMember(member.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
               </TableBody>
             </Table>
           </div>

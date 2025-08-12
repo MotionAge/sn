@@ -41,7 +41,7 @@ export default function AdminDashboard() {
           { title: "Manage Blogs", icon: FileText, href: "/admin/blogs" },
           { title: "Manage Gallery", icon: ImageIcon, href: "/admin/gallery" },
           { title: "Global Presence", icon: Globe, href: "/admin/global-presence" },
-          { title: "Settings", icon: Settings, href: "/admin/settings" },
+          { title: "Verification", icon: Settings, href: "/admin/verification" },
         ].map((item) => (
           <a
             key={item.title}

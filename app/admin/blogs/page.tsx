@@ -1,98 +1,118 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Download, Plus, FileText, Eye, Heart, MessageCircle, Share } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Search, Download, Plus, FileText, Eye, Heart, MessageCircle, Share, AlertCircle } from "lucide-react"
+import { useBlogs } from "@/hooks/use-api"
+import { apiClient } from "@/lib/api-client"
+import { toast } from "sonner"
+import Link from "next/link"
+
+interface Blog {
+  id: string
+  title: string
+  content: string
+  author: string
+  published: boolean
+  created_at: string
+  updated_at: string
+}
 
 export default function BlogsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
+  const { data: blogs, loading, error, execute: fetchBlogs } = useBlogs()
 
-  const blogs = [
-    {
-      id: "BL001",
-      title: "गीता जयन्ती महोत्सवको तयारी",
-      excerpt: "यस वर्षको गीता जयन्ती महोत्सवका लागि विशेष तयारी भइरहेको छ...",
-      author: "Admin",
-      category: "Events",
-      publishDate: "2024-01-15",
-      status: "Published",
-      views: 1247,
-      likes: 89,
-      comments: 23,
-      shares: 45,
-      featured: true,
-    },
-    {
-      id: "BL002",
-      title: "नयाँ सदस्यता योजना सुरु",
-      excerpt: "संस्थाले नयाँ सदस्यता योजना सुरु गरेको छ जसमा विशेष छुट...",
-      author: "Admin",
-      category: "Press Release",
-      publishDate: "2024-01-10",
-      status: "Published",
-      views: 892,
-      likes: 67,
-      comments: 12,
-      shares: 28,
-      featured: false,
-    },
-    {
-      id: "BL003",
-      title: "योग कक्षाको फोटो संग्रह",
-      excerpt: "गत हप्ता आयोजित योग कक्षाका केही सुन्दर तस्बिरहरू...",
-      author: "Editor",
-      category: "Gallery",
-      publishDate: "2024-01-08",
-      status: "Draft",
-      views: 0,
-      likes: 0,
-      comments: 0,
-      shares: 0,
-      featured: false,
-    },
-  ]
+  // Memoize fetchBlogs to avoid unnecessary re-renders
+  const fetchBlogsCallback = useCallback(() => {
+    fetchBlogs()
+  }, [fetchBlogs])
 
-  const stats = [
-    { title: "Total Posts", value: "147", icon: FileText },
-    { title: "Published", value: "132", icon: Eye },
-    { title: "Total Views", value: "25,847", icon: Eye },
-    { title: "Engagement", value: "4.2k", icon: Heart },
-  ]
+  useEffect(() => {
+    fetchBlogsCallback()
+  }, [fetchBlogsCallback])
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Published":
-        return "bg-green-100 text-green-800"
-      case "Draft":
-        return "bg-yellow-100 text-yellow-800"
-      case "Review":
-        return "bg-blue-100 text-blue-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+  const handleDeleteBlog = async (id: string) => {
+    try {
+      const result = await apiClient.deleteBlog(id)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success("Blog deleted successfully")
+        fetchBlogsCallback() // Refresh the list
+      }
+    } catch (error) {
+      toast.error("Failed to delete blog")
     }
   }
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case "Events":
-        return "bg-blue-100 text-blue-800"
-      case "Press Release":
-        return "bg-green-100 text-green-800"
-      case "Gallery":
-        return "bg-purple-100 text-purple-800"
-      case "Polls":
-        return "bg-orange-100 text-orange-800"
-      case "Promotions":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
+  const filteredBlogs = blogs?.filter(blog => {
+    const matchesSearch = blog.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         blog.content.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesCategory = categoryFilter === "all" || 
+                          (categoryFilter === "published" && blog.published) ||
+                          (categoryFilter === "draft" && !blog.published)
+    return matchesSearch && matchesCategory
+  }) || []
+
+  const stats = [
+    { 
+      title: "Total Posts", 
+      value: blogs?.length?.toString() || "0", 
+      icon: FileText 
+    },
+    { 
+      title: "Published", 
+      value: blogs?.filter(b => b.published).length?.toString() || "0", 
+      icon: Eye 
+    },
+    { 
+      title: "Drafts", 
+      value: blogs?.filter(b => !b.published).length?.toString() || "0", 
+      icon: FileText 
+    },///
+    { 
+      title: "Total Authors", 
+      value: blogs ? new Set(blogs.map(b => b.author)).size.toString() : "0", 
+      icon: Heart 
+    },
+  ]
+
+  const getStatusColor = (published: boolean) => {
+    return published 
+      ? "bg-green-100 text-green-800"
+      : "bg-yellow-100 text-yellow-800"
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Failed to load blogs: {error}
+          </AlertDescription>
+        </Alert>
+        <Button onClick={fetchBlogs} variant="outline">
+          Retry
+        </Button>
+      </div>
+    )
   }
 
   return (
@@ -102,9 +122,11 @@ export default function BlogsPage() {
           <h1 className="text-3xl font-bold">Blog Management</h1>
           <p className="text-muted-foreground">Create and manage blog posts, news, and announcements</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          New Post
+        <Button asChild>
+          <Link href="/admin/blogs/new">
+            <Plus className="h-4 w-4 mr-2" />
+            New Post
+          </Link>
         </Button>
       </div>
 
@@ -142,15 +164,12 @@ export default function BlogsPage() {
             </div>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by category" />
+                <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="events">Events</SelectItem>
-                <SelectItem value="press">Press Release</SelectItem>
-                <SelectItem value="gallery">Gallery</SelectItem>
-                <SelectItem value="polls">Polls</SelectItem>
-                <SelectItem value="promotions">Promotions</SelectItem>
+                <SelectItem value="all">All Posts</SelectItem>
+                <SelectItem value="published">Published</SelectItem>
+                <SelectItem value="draft">Drafts</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline">
@@ -165,72 +184,106 @@ export default function BlogsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Post Details</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Engagement</TableHead>
+                  <TableHead>Author</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {blogs.map((blog) => (
-                  <TableRow key={blog.id}>
-                    <TableCell>
-                      <div>
-                        <div className="flex items-center">
-                          <div className="font-medium">{blog.title}</div>
-                          {blog.featured && (
-                            <Badge variant="secondary" className="ml-2 text-xs">
-                              Featured
-                            </Badge>
-                          )}
+                {loading ? (
+                  // Loading skeletons
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-[200px]" />
+                          <Skeleton className="h-3 w-[300px]" />
                         </div>
-                        <div className="text-sm text-muted-foreground mt-1">{blog.excerpt}</div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          by {blog.author} • {blog.publishDate}
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[100px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-6 w-[80px] rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[80px]" />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Skeleton className="h-8 w-[60px]" />
+                          <Skeleton className="h-8 w-[60px]" />
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getCategoryColor(blog.category)}>{blog.category}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center text-sm">
-                          <Eye className="h-3 w-3 mr-1" />
-                          {blog.views.toLocaleString()}
-                        </div>
-                        <div className="flex items-center space-x-3 text-xs text-muted-foreground">
-                          <span className="flex items-center">
-                            <Heart className="h-3 w-3 mr-1" />
-                            {blog.likes}
-                          </span>
-                          <span className="flex items-center">
-                            <MessageCircle className="h-3 w-3 mr-1" />
-                            {blog.comments}
-                          </span>
-                          <span className="flex items-center">
-                            <Share className="h-3 w-3 mr-1" />
-                            {blog.shares}
-                          </span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(blog.status)}>{blog.status}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-3 w-3 mr-1" />
-                          View
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          Edit
-                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredBlogs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8">
+                      <div className="text-muted-foreground">
+                        {searchTerm || categoryFilter !== "all" 
+                          ? "No blogs match your filters" 
+                          : "No blogs found"}
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredBlogs.map((blog) => (
+                    <TableRow key={blog.id}>
+                      <TableCell>
+                        <div>
+                          <div className="flex items-center">
+                            <div className="font-medium">{blog.title}</div>
+                            {blog.published && (
+                              <Badge variant="secondary" className="ml-2 text-xs">
+                                Published
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            {blog.content.substring(0, 100)}...
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Last updated: {formatDate(blog.updated_at)}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{blog.author}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(blog.published)}>
+                          {blog.published ? "Published" : "Draft"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {formatDate(blog.created_at)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button variant="outline" size="sm">
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDeleteBlog(blog.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

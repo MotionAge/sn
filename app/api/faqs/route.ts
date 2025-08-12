@@ -18,23 +18,15 @@ function checkAdmin(req: Request) {
   return true;
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET() {
   try {
     const { data, error } = await supabase
-      .from('donations')
+      .from('faqs')
       .select('*')
-      .eq('id', params.id)
-      .single();
+      .order('created_at', { ascending: false });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    if (!data) {
-      return NextResponse.json({ error: 'Donation not found' }, { status: 404 });
     }
 
     return NextResponse.json(data);
@@ -43,30 +35,22 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest) {
   try {
     if (!checkAdmin(req as unknown as Request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
-    const { donor_name, email, amount, currency, project_id, message } = body;
+    const { question, answer, category, order } = body;
+
+    if (!question || !answer) {
+      return NextResponse.json({ error: 'Question and answer are required' }, { status: 400 });
+    }
 
     const { data, error } = await supabase
-      .from('donations')
-      .update({ 
-        donor_name, 
-        email, 
-        amount, 
-        currency, 
-        project_id, 
-        message,
-        updated_at: new Date().toISOString() 
-      })
-      .eq('id', params.id)
+      .from('faqs')
+      .insert([{ question, answer, category, order }])
       .select()
       .single();
 
@@ -74,31 +58,7 @@ export async function PUT(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json(data);
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
-
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    if (!checkAdmin(req as unknown as Request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { error } = await supabase
-      .from('donations')
-      .delete()
-      .eq('id', params.id);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ message: 'Donation deleted successfully' });
+    return NextResponse.json(data, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

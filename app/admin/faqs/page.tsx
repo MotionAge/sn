@@ -1,98 +1,138 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Plus, HelpCircle, Eye, Edit, Trash2 } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Search, Download, Plus, HelpCircle, AlertCircle } from "lucide-react"
+import { useFaqs } from "@/hooks/use-api"
+import { apiClient } from "@/lib/api-client"
+import { toast } from "sonner"
+import Link from "next/link"
 
-export default function FAQsPage() {
+interface FAQ {
+  id: string
+  question: string
+  answer: string
+  category?: string
+  order?: number
+  created_at: string
+  updated_at: string
+}
+
+export default function FaqsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
+  const { data: faqs, loading, error, execute: fetchFaqs } = useFaqs<FAQ[]>()
 
-  const faqs = [
-    {
-      id: "FAQ001",
-      question: "सदस्यता कसरी लिने?",
-      answer: "सदस्यता लिनको लागि हाम्रो वेबसाइटमा रजिस्ट्रेशन गर्नुहोस् र आवश्यक कागजातहरू पेश गर्नुहोस्।",
-      category: "Membership",
-      language: "Nepali",
-      views: 1247,
-      helpful: 89,
-      status: "Published",
-      lastUpdated: "2024-01-15",
-    },
-    {
-      id: "FAQ002",
-      question: "How to register for events?",
-      answer: "You can register for events through our website's events section or contact our coordinators directly.",
-      category: "Events",
-      language: "English",
-      views: 892,
-      helpful: 67,
-      status: "Published",
-      lastUpdated: "2024-01-10",
-    },
-    {
-      id: "FAQ003",
-      question: "दान कसरी गर्ने?",
-      answer: "तपाईं हाम्रो वेबसाइटको दान सेक्शनबाट eSewa, Khalti वा बैंक ट्रान्सफरमार्फत दान गर्न सक्नुहुन्छ।",
-      category: "Donations",
-      language: "Nepali",
-      views: 654,
-      helpful: 45,
-      status: "Published",
-      lastUpdated: "2024-01-08",
-    },
-    {
-      id: "FAQ004",
-      question: "What are the membership benefits?",
-      answer: "Members get access to exclusive content, priority event registration, and digital certificates.",
-      category: "Membership",
-      language: "English",
-      views: 423,
-      helpful: 32,
-      status: "Draft",
-      lastUpdated: "2024-01-05",
-    },
-  ]
+  // Memoize fetchFaqs to avoid unnecessary re-renders
+  const fetchFaqsCallback = useCallback(() => {
+    fetchFaqs()
+  }, [fetchFaqs])
+
+  useEffect(() => {
+    fetchFaqsCallback()
+  }, [fetchFaqsCallback])
+
+  const handleDeleteFaq = async (id: string) => {
+    try {
+      const result = await apiClient.deleteFaq(id)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success("FAQ deleted successfully")
+        fetchFaqsCallback() // Refresh the list
+      }
+    } catch (error) {
+      toast.error("Failed to delete FAQ")
+    }
+  }
+
+  const filteredFaqs = faqs?.filter(faq => {
+    const matchesSearch = faq.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         faq.answer.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesCategory = categoryFilter === "all" || 
+                          (faq.category && faq.category.toLowerCase() === categoryFilter)
+    return matchesSearch && matchesCategory
+  }) || []
 
   const stats = [
-    { title: "Total FAQs", value: "47", icon: HelpCircle },
-    { title: "Published", value: "42", icon: Eye },
-    { title: "Total Views", value: "15,847", icon: Eye },
-    { title: "Categories", value: "8", icon: HelpCircle },
+    { 
+      title: "Total FAQs", 
+      value: faqs?.length?.toString() || "0", 
+      icon: HelpCircle 
+    },
+    { 
+      title: "Categories", 
+      value: faqs ? new Set(faqs.map(f => f.category).filter(Boolean)).size.toString() : "0", 
+      icon: HelpCircle 
+    },
+    { 
+      title: "This Month", 
+      value: faqs?.filter(f => {
+        const createdDate = new Date(f.created_at)
+        const thisMonth = new Date()
+        return createdDate.getMonth() === thisMonth.getMonth() && 
+               createdDate.getFullYear() === thisMonth.getFullYear()
+      }).length?.toString() || "0", 
+      icon: HelpCircle 
+    },
+    { 
+      title: "Updated", 
+      value: faqs?.filter(f => {
+        const updatedDate = new Date(f.updated_at)
+        const thisMonth = new Date()
+        return updatedDate.getMonth() === thisMonth.getMonth() && 
+               updatedDate.getFullYear() === thisMonth.getFullYear()
+      }).length?.toString() || "0", 
+      icon: HelpCircle 
+    },
   ]
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Published":
-        return "bg-green-100 text-green-800"
-      case "Draft":
-        return "bg-yellow-100 text-yellow-800"
-      case "Review":
+  const getCategoryColor = (category?: string) => {
+    if (!category) return "bg-gray-100 text-gray-800"
+    
+    switch (category.toLowerCase()) {
+      case "general":
         return "bg-blue-100 text-blue-800"
+      case "membership":
+        return "bg-green-100 text-green-800"
+      case "events":
+        return "bg-purple-100 text-purple-800"
+      case "donations":
+        return "bg-orange-100 text-orange-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
   }
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case "Membership":
-        return "bg-blue-100 text-blue-800"
-      case "Events":
-        return "bg-green-100 text-green-800"
-      case "Donations":
-        return "bg-purple-100 text-purple-800"
-      case "Library":
-        return "bg-orange-100 text-orange-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Failed to load FAQs: {error}
+          </AlertDescription>
+        </Alert>
+        <Button onClick={fetchFaqs} variant="outline">
+          Retry
+        </Button>
+      </div>
+    )
   }
 
   return (
@@ -102,9 +142,11 @@ export default function FAQsPage() {
           <h1 className="text-3xl font-bold">FAQ Management</h1>
           <p className="text-muted-foreground">Manage frequently asked questions and answers</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Add FAQ
+        <Button asChild>
+          <Link href="/admin/faqs/new">
+            <Plus className="h-4 w-4 mr-2" />
+            New FAQ
+          </Link>
         </Button>
       </div>
 
@@ -126,8 +168,8 @@ export default function FAQsPage() {
       {/* FAQs Management */}
       <Card>
         <CardHeader>
-          <CardTitle>Frequently Asked Questions</CardTitle>
-          <CardDescription>Manage FAQs to help users find answers quickly</CardDescription>
+          <CardTitle>FAQs List</CardTitle>
+          <CardDescription>Manage all frequently asked questions and answers</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -146,12 +188,16 @@ export default function FAQsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="general">General</SelectItem>
                 <SelectItem value="membership">Membership</SelectItem>
                 <SelectItem value="events">Events</SelectItem>
                 <SelectItem value="donations">Donations</SelectItem>
-                <SelectItem value="library">Library</SelectItem>
               </SelectContent>
             </Select>
+            <Button variant="outline">
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
           </div>
 
           {/* FAQs Table */}
@@ -159,60 +205,97 @@ export default function FAQsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Question & Answer</TableHead>
+                  <TableHead>Question</TableHead>
+                  <TableHead>Answer</TableHead>
                   <TableHead>Category</TableHead>
-                  <TableHead>Engagement</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Created</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {faqs.map((faq) => (
-                  <TableRow key={faq.id}>
-                    <TableCell>
-                      <div className="space-y-2">
-                        <div>
-                          <div className="font-medium">{faq.question}</div>
-                          <div className="text-sm text-muted-foreground mt-1">
-                            {faq.answer.length > 100 ? `${faq.answer.substring(0, 100)}...` : faq.answer}
-                          </div>
+                {loading ? (
+                  // Loading skeletons
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[200px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[300px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-6 w-[80px] rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[40px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[80px]" />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Skeleton className="h-8 w-[60px]" />
+                          <Skeleton className="h-8 w-[60px]" />
                         </div>
-                        <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                          <Badge variant="outline" className="text-xs">
-                            {faq.language}
-                          </Badge>
-                          <span>Updated: {faq.lastUpdated}</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getCategoryColor(faq.category)}>{faq.category}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center text-sm">
-                          <Eye className="h-3 w-3 mr-1" />
-                          {faq.views.toLocaleString()} views
-                        </div>
-                        <div className="text-xs text-muted-foreground">{faq.helpful} found helpful</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(faq.status)}>{faq.status}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm">
-                          <Edit className="h-3 w-3 mr-1" />
-                          Edit
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredFaqs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8">
+                      <div className="text-muted-foreground">
+                        {searchTerm || categoryFilter !== "all" 
+                          ? "No FAQs match your filters" 
+                          : "No FAQs found"}
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredFaqs.map((faq) => (
+                    <TableRow key={faq.id}>
+                      <TableCell>
+                        <div className="font-medium">{faq.question}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-muted-foreground max-w-md truncate">
+                          {faq.answer}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getCategoryColor(faq.category)}>
+                          {faq.category || "Uncategorized"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">{faq.order || "-"}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {formatDate(faq.created_at)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button variant="outline" size="sm">
+                            View
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDeleteFaq(faq.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

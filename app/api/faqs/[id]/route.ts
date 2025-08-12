@@ -3,7 +3,6 @@ import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const BUCKET = process.env.SUPABASE_GALLERY_BUCKET || 'gallery';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
@@ -25,7 +24,7 @@ export async function GET(
 ) {
   try {
     const { data, error } = await supabase
-      .from('gallery')
+      .from('faqs')
       .select('*')
       .eq('id', params.id)
       .single();
@@ -35,7 +34,7 @@ export async function GET(
     }
 
     if (!data) {
-      return NextResponse.json({ error: 'Gallery item not found' }, { status: 404 });
+      return NextResponse.json({ error: 'FAQ not found' }, { status: 404 });
     }
 
     return NextResponse.json(data);
@@ -54,15 +53,15 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { image_url, caption, category, tags } = body;
+    const { question, answer, category, order } = body;
 
     const { data, error } = await supabase
-      .from('gallery')
+      .from('faqs')
       .update({ 
-        image_url, 
-        caption, 
+        question, 
+        answer, 
         category, 
-        tags,
+        order,
         updated_at: new Date().toISOString() 
       })
       .eq('id', params.id)
@@ -88,28 +87,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // First get the image URL to delete from storage
-    const { data: item, error: fetchError } = await supabase
-      .from('gallery')
-      .select('image_url')
-      .eq('id', params.id)
-      .single();
-
-    if (fetchError) {
-      return NextResponse.json({ error: fetchError.message }, { status: 500 });
-    }
-
-    // Delete from storage if image_url exists
-    if (item?.image_url) {
-      const path = item.image_url.split('/').pop(); // Extract filename from URL
-      if (path) {
-        await supabase.storage.from(BUCKET).remove([path]);
-      }
-    }
-
-    // Delete from database
     const { error } = await supabase
-      .from('gallery')
+      .from('faqs')
       .delete()
       .eq('id', params.id);
 
@@ -117,8 +96,9 @@ export async function DELETE(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ message: 'Gallery item deleted successfully' });
+    return NextResponse.json({ message: 'FAQ deleted successfully' });
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
