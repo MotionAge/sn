@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Search, Download, Plus, FileText, Eye, Heart, MessageCircle, Share, AlertCircle } from "lucide-react"
+import { Search, Download, Plus, FileText, Eye, Heart, AlertCircle } from "lucide-react"
 import { useBlogs } from "@/hooks/use-api"
 import { apiClient } from "@/lib/api-client"
 import { toast } from "sonner"
@@ -28,9 +28,11 @@ interface Blog {
 export default function BlogsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
-  const { data: blogs, loading, error, execute: fetchBlogs } = useBlogs()
 
-  // Memoize fetchBlogs to avoid unnecessary re-renders
+  // Explicitly type blogs as Blog[] | null
+  const { data: blogs, loading, error, execute: fetchBlogs } = useBlogs()
+  const safeBlogs: Blog[] = Array.isArray(blogs) ? blogs : []
+
   const fetchBlogsCallback = useCallback(() => {
     fetchBlogs()
   }, [fetchBlogs])
@@ -46,67 +48,64 @@ export default function BlogsPage() {
         toast.error(result.error)
       } else {
         toast.success("Blog deleted successfully")
-        fetchBlogsCallback() // Refresh the list
+        fetchBlogsCallback()
       }
     } catch (error) {
       toast.error("Failed to delete blog")
     }
   }
+  // Ensure blogs is treated as Blog[] or an empty array
+  const filteredBlogs: Blog[] = safeBlogs.filter((blog: Blog) => {
+    const matchesSearch =
+      blog.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      blog.content.toLowerCase().includes(searchTerm.toLowerCase())
 
-  const filteredBlogs = blogs?.filter(blog => {
-    const matchesSearch = blog.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         blog.content.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = categoryFilter === "all" || 
-                          (categoryFilter === "published" && blog.published) ||
-                          (categoryFilter === "draft" && !blog.published)
+    const matchesCategory =
+      categoryFilter === "all" ||
+      (categoryFilter === "published" && blog.published) ||
+      (categoryFilter === "draft" && !blog.published)
+
     return matchesSearch && matchesCategory
-  }) || []
+  })
+const stats = [
+  {
+    title: "Total Posts",
+    value: safeBlogs.length.toString(),
+    icon: FileText,
+  },
+  {
+    title: "Published",
+    value: safeBlogs.filter(b => b.published).length.toString(),
+    icon: Eye,
+  },
+  {
+    title: "Drafts",
+    value: safeBlogs.filter(b => !b.published).length.toString(),
+    icon: FileText,
+  },
+  {
+    title: "Total Authors",
+    value: safeBlogs.length ? new Set(safeBlogs.map(b => b.author)).size.toString() : "0",
+    icon: Heart,
+  },
+]
 
-  const stats = [
-    { 
-      title: "Total Posts", 
-      value: blogs?.length?.toString() || "0", 
-      icon: FileText 
-    },
-    { 
-      title: "Published", 
-      value: blogs?.filter(b => b.published).length?.toString() || "0", 
-      icon: Eye 
-    },
-    { 
-      title: "Drafts", 
-      value: blogs?.filter(b => !b.published).length?.toString() || "0", 
-      icon: FileText 
-    },///
-    { 
-      title: "Total Authors", 
-      value: blogs ? new Set(blogs.map(b => b.author)).size.toString() : "0", 
-      icon: Heart 
-    },
-  ]
+  const getStatusColor = (published: boolean) =>
+    published ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
 
-  const getStatusColor = (published: boolean) => {
-    return published 
-      ? "bg-green-100 text-green-800"
-      : "bg-yellow-100 text-yellow-800"
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     })
-  }
 
   if (error) {
     return (
       <div className="space-y-6">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Failed to load blogs: {error}
-          </AlertDescription>
+          <AlertDescription>Failed to load blogs: {error}</AlertDescription>
         </Alert>
         <Button onClick={fetchBlogs} variant="outline">
           Retry
@@ -132,7 +131,7 @@ export default function BlogsPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
+        {stats.map(stat => (
           <Card key={stat.title}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
@@ -158,7 +157,7 @@ export default function BlogsPage() {
               <Input
                 placeholder="Search posts..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={e => setSearchTerm(e.target.value)}
                 className="pl-10"
               />
             </div>
@@ -222,14 +221,14 @@ export default function BlogsPage() {
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8">
                       <div className="text-muted-foreground">
-                        {searchTerm || categoryFilter !== "all" 
-                          ? "No blogs match your filters" 
+                        {searchTerm || categoryFilter !== "all"
+                          ? "No blogs match your filters"
                           : "No blogs found"}
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredBlogs.map((blog) => (
+                  filteredBlogs.map(blog => (
                     <TableRow key={blog.id}>
                       <TableCell>
                         <div>
@@ -258,21 +257,18 @@ export default function BlogsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">
-                          {formatDate(blog.created_at)}
-                        </div>
+                        <div className="text-sm">{formatDate(blog.created_at)}</div>
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
                           <Button variant="outline" size="sm">
-                            <Eye className="h-3 w-3 mr-1" />
                             View
                           </Button>
                           <Button variant="outline" size="sm">
                             Edit
                           </Button>
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={() => handleDeleteBlog(blog.id)}
                             className="text-red-600 hover:text-red-700"

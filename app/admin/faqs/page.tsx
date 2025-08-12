@@ -28,7 +28,8 @@ interface FAQ {
 export default function FaqsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
-  const { data: faqs, loading, error, execute: fetchFaqs } = useFaqs<FAQ[]>()
+  const { data, loading, error, execute: fetchFaqs } = useFaqs()
+  const faqs: FAQ[] = (data as FAQ[]) || []
 
   // Memoize fetchFaqs to avoid unnecessary re-renders
   const fetchFaqsCallback = useCallback(() => {

@@ -34,7 +34,8 @@ interface Event {
 export default function EventsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const { data: events, loading, error, execute: fetchEvents } = useEvents<Event[]>()
+  const { data, loading, error, execute: fetchEvents } = useEvents()
+  const events: Event[] = (data as Event[]) || []
 
   // Memoize fetchEvents to avoid unnecessary re-renders
   const fetchEventsCallback = useCallback(() => {

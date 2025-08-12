@@ -34,7 +34,8 @@ interface Member {
 export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const { data: members, loading, error, execute: fetchMembers } = useMembers<Member[]>()
+  const { data, loading, error, execute: fetchMembers } = useMembers()
+  const members: Member[] = (data as Member[]) || []
 
   // Memoize fetchMembers to avoid unnecessary re-renders
   const fetchMembersCallback = useCallback(() => {
