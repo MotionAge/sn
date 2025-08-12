@@ -315,9 +315,9 @@ export default function LibraryPage() {
       </section>
 
       {/* Featured Video */}
-      <section className="mb-12">
+      {/* <section className="mb-12">
         <PageVideo videoId="library-page-video" />
-      </section>
+      </section> */}
 
       {/* Library Categories */}
       <section className="mb-12">

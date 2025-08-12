@@ -125,9 +125,9 @@ export default function ContactPage() {
       </section>
 
       {/* Featured Video */}
-      <section className="mb-12">
+      {/* <section className="mb-12">
         <PageVideo videoId="contact-page-video" />
-      </section>
+      </section> */}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
         {/* Contact Form */}

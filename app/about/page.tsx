@@ -38,9 +38,9 @@ export default function AboutPage() {
       </section>
 
       {/* Featured Video */}
-      <section className="mb-12">
+      {/* <section className="mb-12">
         <PageVideo videoId="about-page-video" />
-      </section>
+      </section> */}
 
       {/* Organization Description */}
       <section className="mb-12">

@@ -13,9 +13,9 @@ export default function Home() {
       <HeroCarousel />
 
       {/* Featured Video */}
-      <section className="my-12">
+      {/* <section className="my-12">
         <PageVideo videoId="example-video-id" />
-      </section>
+      </section> */}
 
       {/* Featured Events */}
       <section className="my-12">

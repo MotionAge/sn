@@ -185,9 +185,9 @@ export default function EventsPage() {
       </section>
 
       {/* Featured Video */}
-      <section className="mb-12">
+      {/* <section className="mb-12">
         <PageVideo videoId="events-page-video" />
-      </section>
+      </section> */}
 
       {/* Event Categories */}
       <section className="mb-12">

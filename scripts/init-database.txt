@@ -1,0 +1,142 @@
+-- Enable UUID generation extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Membership table
+CREATE TABLE IF NOT EXISTS membership (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    serial_number text UNIQUE NOT NULL,
+    full_name text NOT NULL,
+    email text UNIQUE NOT NULL,
+    phone text NOT NULL,
+    address text NOT NULL,
+    date_of_birth date NOT NULL,
+    membership_type text NOT NULL,
+    start_date date NOT NULL,
+    end_date date,
+    is_active boolean DEFAULT true,
+    referral_code text,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+
+-- Events table (renamed event_date instead of date)
+CREATE TABLE IF NOT EXISTS events (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title text NOT NULL,
+    description text NOT NULL,
+    image_url text,
+    event_date date NOT NULL,
+    start_time time NOT NULL,
+    end_time time NOT NULL,
+    location text NOT NULL,
+    category text NOT NULL,
+    is_paid boolean DEFAULT false,
+    price numeric,
+    max_participants integer,
+    current_participants integer DEFAULT 0,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+
+-- Projects table
+CREATE TABLE IF NOT EXISTS projects (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title text NOT NULL,
+    description text NOT NULL,
+    image_url text,
+    goal_amount numeric NOT NULL,
+    raised_amount numeric DEFAULT 0,
+    currency text DEFAULT 'NPR',
+    status text NOT NULL,
+    start_date date NOT NULL,
+    end_date date,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+
+-- Blogs table
+CREATE TABLE IF NOT EXISTS blogs (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title text NOT NULL,
+    excerpt text NOT NULL,
+    content text NOT NULL,
+    image_url text,
+    author text NOT NULL,
+    category text NOT NULL,
+    published_at timestamptz DEFAULT now(),
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+
+-- Library table
+CREATE TABLE IF NOT EXISTS library (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title text NOT NULL,
+    description text NOT NULL,
+    type text NOT NULL,
+    file_url text,
+    thumbnail_url text,
+    is_free boolean DEFAULT true,
+    category text NOT NULL,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+
+-- Gallery table
+CREATE TABLE IF NOT EXISTS gallery (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title text NOT NULL,
+    description text,
+    image_url text NOT NULL,
+    category text,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+
+-- Donations table
+CREATE TABLE IF NOT EXISTS donations (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    donor_name text NOT NULL,
+    donor_email text,
+    donor_phone text,
+    amount numeric NOT NULL,
+    currency text DEFAULT 'NPR',
+    project_id uuid REFERENCES projects(id),
+    payment_method text NOT NULL,
+    transaction_id text,
+    receipt_number text UNIQUE NOT NULL,
+    created_at timestamptz DEFAULT now()
+);
+
+-- Certificates table
+CREATE TABLE IF NOT EXISTS certificates (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    serial_number text UNIQUE NOT NULL,
+    recipient_name text NOT NULL,
+    recipient_email text NOT NULL,
+    certificate_type text NOT NULL,
+    issued_date date NOT NULL,
+    pdf_url text NOT NULL,
+    created_at timestamptz DEFAULT now()
+);
+
+-- FAQs table
+CREATE TABLE IF NOT EXISTS faqs (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    question text NOT NULL,
+    answer text NOT NULL,
+    page_id text NOT NULL,
+    order_index integer DEFAULT 0,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+
+-- Settings table
+CREATE TABLE IF NOT EXISTS settings (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    key text UNIQUE NOT NULL,
+    value text NOT NULL,
+    description text,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);

@@ -193,9 +193,9 @@ export default function BlogsPage() {
       </section>
 
       {/* Featured Video */}
-      <section className="mb-12">
+      {/* <section className="mb-12">
         <PageVideo videoId="blogs-page-video" />
-      </section>
+      </section> */}
 
       {/* Blog Categories */}
       <section className="mb-12">

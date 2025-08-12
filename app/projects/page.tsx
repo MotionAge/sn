@@ -143,9 +143,9 @@ export default function ProjectsPage() {
       </section>
 
       {/* Featured Video */}
-      <section className="mb-12">
+      {/* <section className="mb-12">
         <PageVideo videoId="projects-page-video" />
-      </section>
+      </section> */}
 
       {/* Annual Calendar CTA */}
       <section className="mb-12">
@@ -217,7 +217,7 @@ export default function ProjectsPage() {
                             of {formatCurrency(project.goalAmount, project.currency)}
                           </span>
                         </div>
-                        <Progress value={progress} className="h-2 bg-gray-200" indicatorClassName="bg-orange-600" />
+                        <Progress value={progress} className="h-2 bg-gray-200" />
                         <div className="text-right text-sm text-gray-500">{progress}% complete</div>
                       </div>
                     </CardContent>
