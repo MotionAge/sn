@@ -68,7 +68,19 @@ interface FileUsageRow {
 }
 
 class FileUploadManager {
-  private supabase = createClientSupabaseClient()
+  private supabase: ReturnType<typeof createClientSupabaseClient> | null = null
+
+  private getSupabaseClient() {
+    if (!this.supabase) {
+      try {
+        this.supabase = createClientSupabaseClient()
+      } catch (error) {
+        console.error('Failed to create Supabase client:', error)
+        throw new Error('Supabase client not available. Please check your environment variables.')
+      }
+    }
+    return this.supabase
+  }
 
   /**
    * Upload a file to Supabase storage and create database record
@@ -76,13 +88,14 @@ class FileUploadManager {
   async uploadFile(options: FileUploadOptions): Promise<UploadedFile> {
     try {
       const { bucket, path, file, metadata } = options
+      const supabase = this.getSupabaseClient()
 
       // Generate unique file path
       const fileName = this.generateFileName(file.name)
       const filePath = path ? `${path}/${fileName}` : fileName
 
       // Upload file to Supabase storage
-      const { data: uploadData, error: uploadError } = await this.supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from(bucket)
         .upload(filePath, file, {
           cacheControl: '3600',
@@ -99,12 +112,12 @@ class FileUploadManager {
       const mimeType = file.type
 
       // Get public URL
-      const { data: urlData } = this.supabase.storage
+      const { data: urlData } = supabase.storage
         .from(bucket)
         .getPublicUrl(filePath)
 
       // Create database record
-      const { data: dbData, error: dbError } = await this.supabase
+      const { data: dbData, error: dbError } = await supabase
         .from('media_files')
         .insert({
           file_name: fileName,
@@ -125,7 +138,7 @@ class FileUploadManager {
 
       if (dbError) {
         // If database insert fails, delete the uploaded file
-        await this.supabase.storage.from(bucket).remove([filePath])
+        await supabase.storage.from(bucket).remove([filePath])
         throw new Error(`Database record creation failed: ${dbError.message}`)
       }
 
@@ -137,7 +150,7 @@ class FileUploadManager {
 
       // Update database with thumbnail path if generated
       if (thumbnailPath) {
-        await this.supabase
+        await supabase
           .from('media_files')
           .update({ thumbnail_path: thumbnailPath })
           .eq('id', dbData.id as string)
@@ -175,7 +188,8 @@ class FileUploadManager {
    */
   async linkFileToEntity(fileId: string, usage: FileUsage): Promise<void> {
     try {
-      const { error } = await this.supabase
+      const supabase = this.getSupabaseClient()
+      const { error } = await supabase
         .from('file_usage')
         .insert({
           file_id: fileId,
@@ -197,75 +211,77 @@ class FileUploadManager {
   /**
    * Get files for a specific entity
    */
+  async getEntityFiles(entityType: string, entityId: string): Promise<UploadedFile[]> {
+    try {
+      const supabase = this.getSupabaseClient()
+      
+      // 1️⃣ Get file_usage records
+      const { data: usageData, error: usageError } = await supabase
+        .from('file_usage')
+        .select('*')
+        .eq('entity_type', entityType)
+        .eq('entity_id', entityId)
+        .order('order_index', { ascending: true });
 
+      if (usageError) throw usageError;
+      if (!usageData || usageData.length === 0) return [];
 
-async getEntityFiles(entityType: string, entityId: string): Promise<UploadedFile[]> {
-  try {
-    // 1️⃣ Get file_usage records
-    const { data: usageData, error: usageError } = await this.supabase
-      .from('file_usage')
-      .select('*')
-      .eq('entity_type', entityType)
-      .eq('entity_id', entityId)
-      .order('order_index', { ascending: true });
+      // 2️⃣ Get all media_files for these file_ids
+      const fileIds = usageData.map(u => u.file_id);
+      const { data: filesData, error: filesError } = await supabase
+        .from('media_files')
+        .select('*')
+        .in('id', fileIds);
 
-    if (usageError) throw usageError;
-    if (!usageData || usageData.length === 0) return [];
+      if (filesError) throw filesError;
 
-    // 2️⃣ Get all media_files for these file_ids
-    const fileIds = usageData.map(u => u.file_id);
-    const { data: filesData, error: filesError } = await this.supabase
-      .from('media_files')
-      .select('*')
-      .in('id', fileIds);
+      // 3️⃣ Map usage → files
+      return usageData
+        .map(u => {
+          const file = filesData.find(f => f.id === u.file_id);
+          if (!file) return null;
 
-    if (filesError) throw filesError;
+          return {
+            id: file.id,
+            fileName: file.file_name,
+            originalName: file.original_name,
+            filePath: file.file_path,
+            bucketName: file.bucket_name,
+            fileSize: file.file_size,
+            mimeType: file.mime_type,
+            fileType: file.file_type,
+            width: file.width,
+            height: file.height,
+            duration: file.duration,
+            thumbnailPath: file.thumbnail_path,
+            altText: file.alt_text,
+            description: file.description,
+            tags: file.tags,
+            isPublic: file.is_public,
+            url: this.getFileUrl(file.bucket_name as string, file.file_path as string),
+            thumbnailUrl:
+              typeof file.thumbnail_path === 'string'
+                ? this.getThumbnailUrl(file.bucket_name as string, file.thumbnail_path)
+                : undefined
+          };
+        })
+        .filter(Boolean) as UploadedFile[];
 
-    // 3️⃣ Map usage → files
-    return usageData
-      .map(u => {
-        const file = filesData.find(f => f.id === u.file_id);
-        if (!file) return null;
-
-        return {
-          id: file.id,
-          fileName: file.file_name,
-          originalName: file.original_name,
-          filePath: file.file_path,
-          bucketName: file.bucket_name,
-          fileSize: file.file_size,
-          mimeType: file.mime_type,
-          fileType: file.file_type,
-          width: file.width,
-          height: file.height,
-          duration: file.duration,
-          thumbnailPath: file.thumbnail_path,
-          altText: file.alt_text,
-          description: file.description,
-          tags: file.tags,
-          isPublic: file.is_public,
-          url: this.getFileUrl(file.bucket_name as string, file.file_path as string),
-          thumbnailUrl:
-            typeof file.thumbnail_path === 'string'
-              ? this.getThumbnailUrl(file.bucket_name as string, file.thumbnail_path)
-              : undefined
-        };
-      })
-      .filter(Boolean) as UploadedFile[];
-
-  } catch (error) {
-    console.error('Get entity files error:', error);
-    throw error;
+    } catch (error) {
+      console.error('Get entity files error:', error);
+      throw error;
+    }
   }
-}
 
   /**
    * Delete a file and its database record
    */
   async deleteFile(fileId: string): Promise<void> {
     try {
+      const supabase = this.getSupabaseClient()
+      
       // Get file info from database
-      const { data: file, error: fetchError } = await this.supabase
+      const { data: file, error: fetchError } = await supabase
         .from('media_files')
         .select('*')
         .eq('id', fileId)
@@ -276,7 +292,7 @@ async getEntityFiles(entityType: string, entityId: string): Promise<UploadedFile
       }
 
       // Delete from storage
-      const { error: storageError } = await this.supabase.storage
+      const { error: storageError } = await supabase.storage
         .from(file.bucket_name as string)
         .remove([file.file_path as string])
 
@@ -286,13 +302,13 @@ async getEntityFiles(entityType: string, entityId: string): Promise<UploadedFile
 
       // Delete thumbnail if exists
       if (typeof file.thumbnail_path === 'string' && file.thumbnail_path.length > 0) {
-        await this.supabase.storage
+        await supabase.storage
           .from(file.bucket_name as string)
           .remove([file.thumbnail_path])
       }
 
       // Delete database record (cascade will handle file_usage)
-      const { error: dbError } = await this.supabase
+      const { error: dbError } = await supabase
         .from('media_files')
         .delete()
         .eq('id', fileId)
@@ -311,7 +327,8 @@ async getEntityFiles(entityType: string, entityId: string): Promise<UploadedFile
    */
   async updateFileMetadata(fileId: string, metadata: Partial<UploadedFile>): Promise<void> {
     try {
-      const { error } = await this.supabase
+      const supabase = this.getSupabaseClient()
+      const { error } = await supabase
         .from('media_files')
         .update({
           alt_text: metadata.altText,
@@ -357,8 +374,14 @@ async getEntityFiles(entityType: string, entityId: string): Promise<UploadedFile
   }
 
   private getFileUrl(bucket: string, path: string): string {
-    const { data } = this.supabase.storage.from(bucket).getPublicUrl(path)
-    return data.publicUrl
+    try {
+      const supabase = this.getSupabaseClient()
+      const { data } = supabase.storage.from(bucket).getPublicUrl(path)
+      return data.publicUrl
+    } catch (error) {
+      console.error('Error getting file URL:', error)
+      return ''
+    }
   }
 
   private getThumbnailUrl(bucket: string, path: string): string {

@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     // expect { id, title, content }
     const { id, title, content } = body;
     if (!id) return NextResponse.json({ error: 'id is required (slug like "hero", "about")' }, { status: 400 });
-    const { data, error } = await supabase.from('pages').upsert([{ id, title, content }], { onConflict: ['id'] }).select().single();
+    const { data, error } = await supabase.from('pages').upsert([{ id, title, content }], { onConflict: 'id' }).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data, { status: 201 });
   } catch (err: any) {
