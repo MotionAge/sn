@@ -275,6 +275,63 @@ class ApiClient {
       method: 'DELETE',
     })
   }
+
+  // Hero Slides API
+  async getHeroSlides() {
+    return this.request('/hero-slides')
+  }
+
+  async createHeroSlide(slideData: {
+    title: string
+    description: string
+    image_url: string
+    cta_text: string
+    cta_url: string
+    order_index: number
+    is_active: boolean
+  }) {
+    return this.request('/hero-slides', {
+      method: 'POST',
+      body: JSON.stringify(slideData),
+    })
+  }
+
+  async updateHeroSlide(id: string, slideData: any) {
+    return this.request(`/hero-slides/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(slideData),
+    })
+  }
+
+  async deleteHeroSlide(id: string) {
+    return this.request(`/hero-slides/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Approvals API
+  async getPendingApprovals() {
+    return this.request('/approvals')
+  }
+
+  async approveItem(id: string, type: string) {
+    return this.request(`/approvals/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ type }),
+    })
+  }
+
+  async rejectItem(id: string, type: string) {
+    return this.request(`/approvals/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ type }),
+    })
+  }
+
+  // Verification API
+  async verifyItem(query: string) {
+    return this.request(`/verification?q=${encodeURIComponent(query)}`)
+  }
 }
 
 export const apiClient = new ApiClient()

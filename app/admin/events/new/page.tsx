@@ -10,11 +10,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { FileUpload } from "@/components/ui/file-upload"
 import { Save, Calendar, Users } from "lucide-react"
 
 export default function NewEventPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [eventId, setEventId] = useState<string>("")
 
   const [formData, setFormData] = useState({
     title: "",
@@ -41,6 +43,11 @@ export default function NewEventPage() {
     featuredImage: "",
     status: "draft",
     featured: false,
+  })
+
+  // Generate a temporary event ID for file uploads
+  useState(() => {
+    setEventId(`temp-${Date.now()}`)
   })
 
   const categories = [
@@ -130,6 +137,26 @@ export default function NewEventPage() {
                       placeholder="Describe the event..."
                       rows={8}
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="featuredImage">Featured Image</Label>
+                    <FileUpload
+                      bucket="event-images"
+                      entityType="event"
+                      entityId={eventId}
+                      usageType="primary"
+                      onUploadComplete={(files) => {
+                        console.log('Featured image uploaded:', files)
+                        // You can store the file ID if needed
+                      }}
+                      onUploadError={(error) => {
+                        console.error('Upload failed:', error)
+                      }}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Upload a high-quality image for the event (max 5MB, JPG/PNG)
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

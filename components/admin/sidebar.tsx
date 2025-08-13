@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button"
 export default function AdminSidebar() {
   const menuItems = [
     { name: "Dashboard", icon: Home, href: "/admin" },
+    { name: "Hero Slides", icon: ImageIcon, href: "/admin/hero-slides" },
     { name: "Members", icon: Users, href: "/admin/members" },
     { name: "Events", icon: Calendar, href: "/admin/events" },
     { name: "Donations", icon: DollarSign, href: "/admin/donations" },

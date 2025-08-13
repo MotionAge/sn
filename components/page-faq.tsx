@@ -1,61 +1,81 @@
 "use client"
+
+import { useState, useEffect } from "react"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { useApi } from "@/hooks/use-api"
+import { apiClient } from "@/lib/api-client"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface PageFAQProps {
   pageId: string
 }
 
-export default function PageFAQ({ pageId }: PageFAQProps) {
-  // Mock function to fetch FAQs from CMS based on page ID
-  // In production, this would be fetched from the database
-  const getFAQs = (id: string) => {
-    // Default FAQs if none are set for this page
-    const defaultFAQs = [
-      {
-        id: "faq-1",
-        question: "What is Sanatan Dharma Bigyan Samaj?",
-        answer:
-          "Sanatan Dharma Bigyan Samaj (SDB Nepal) is an organization dedicated to preserving and promoting the values and teachings of Sanatan Dharma through education, community service, and cultural programs.",
-      },
-      {
-        id: "faq-2",
-        question: "How can I become a member?",
-        answer:
-          "You can become a member by visiting our 'Apply for Membership' page and filling out the application form. We offer both general and lifetime membership options.",
-      },
-      {
-        id: "faq-3",
-        question: "What types of events do you organize?",
-        answer:
-          "We organize various events including Gurukul admissions, pilgrimages to sacred sites, Sanskrit learning workshops, Vedic mathematics training, and cultural celebrations.",
-      },
-      {
-        id: "faq-4",
-        question: "How can I support your initiatives?",
-        answer:
-          "You can support our initiatives by donating to specific projects, becoming a member, volunteering your time, or participating in our events and programs.",
-      },
-      {
-        id: "faq-5",
-        question: "Do you offer online courses?",
-        answer:
-          "Yes, we offer various online courses including Sanskrit learning, Vedic mathematics, and other educational programs related to Sanatan Dharma.",
-      },
-    ]
+interface FAQ {
+  id: string
+  question: string
+  answer: string
+  page_id: string
+  order_index: number
+  is_active: boolean
+}
 
-    // In a real application, you would fetch FAQs based on the pageId
-    // For now, we'll just return the default FAQs
-    return defaultFAQs
+export default function PageFAQ({ pageId }: PageFAQProps) {
+  const { data: faqs, loading, error, execute: fetchFaqs } = useApi(apiClient.getFaqs)
+
+  useEffect(() => {
+    fetchFaqs()
+  }, [fetchFaqs])
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="border rounded-lg p-4">
+            <Skeleton className="h-6 w-3/4 mb-2" />
+            <Skeleton className="h-4 w-full" />
+          </div>
+        ))}
+      </div>
+    )
   }
 
-  const faqs = getFAQs(pageId)
+  if (error || !faqs) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500 mb-4">Unable to load FAQs</p>
+        <button 
+          onClick={fetchFaqs}
+          className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  // Cast faqs to FAQ[] here to fix the TS error
+  const pageFaqs = (faqs as FAQ[])
+    .filter((faq) => faq.page_id === pageId && faq.is_active)
+    .sort((a, b) => a.order_index - b.order_index)
+
+  if (pageFaqs.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500">No FAQs available for this page</p>
+      </div>
+    )
+  }
 
   return (
     <Accordion type="single" collapsible className="w-full">
-      {faqs.map((faq) => (
+      {pageFaqs.map((faq) => (
         <AccordionItem key={faq.id} value={faq.id}>
-          <AccordionTrigger className="text-left font-medium text-gray-800">{faq.question}</AccordionTrigger>
-          <AccordionContent className="text-gray-600">{faq.answer}</AccordionContent>
+          <AccordionTrigger className="text-left">
+            {faq.question}
+          </AccordionTrigger>
+          <AccordionContent className="text-gray-600">
+            {faq.answer}
+          </AccordionContent>
         </AccordionItem>
       ))}
     </Accordion>

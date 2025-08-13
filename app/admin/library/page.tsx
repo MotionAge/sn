@@ -7,11 +7,15 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { FileUpload } from "@/components/ui/file-upload"
 import { Search, Download, Plus, BookOpen, Eye, DownloadIcon } from "lucide-react"
 
 export default function LibraryPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const [libraryId] = useState(`library-${Date.now()}`)
 
   const books = [
     {
@@ -82,10 +86,48 @@ export default function LibraryPage() {
           <h1 className="text-3xl font-bold">Library Management</h1>
           <p className="text-muted-foreground">Manage digital books, documents, and resources</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Book
-        </Button>
+        <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Book
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add New Document</DialogTitle>
+              <DialogDescription>
+                Upload documents, books, and other resources to your library. Supported formats: PDF, Word, EPUB, and more.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <FileUpload
+                bucket="library"
+                acceptedTypes={[
+                  'application/pdf',
+                  'application/msword',
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                  'application/epub+zip',
+                  'text/plain',
+                  'video/*',
+                  'audio/*'
+                ]}
+                maxSize={50 * 1024 * 1024} // 50MB
+                entityType="library"
+                entityId={libraryId}
+                usageType="attachment"
+                onUploadComplete={(files) => {
+                  console.log('Document uploaded:', files)
+                  // Refresh library or add to local state
+                  setIsUploadModalOpen(false)
+                }}
+                onUploadError={(error) => {
+                  console.error('Upload failed:', error)
+                }}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Stats Cards */}
