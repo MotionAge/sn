@@ -1,280 +1,379 @@
 "use client"
 
-import { useState } from "react"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { Button } from "@/components/ui/button"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Heart, BookOpen, School, Home, Users } from "lucide-react"
-import { useSearchParams } from "next/navigation"
+import type React from "react"
 
-const formSchema = z.object({
-  donorName: z.string().min(2, "Name must be at least 2 characters"),
-  donorEmail: z.string().email("Invalid email address"),
-  donorPhone: z.string().min(10, "Phone number must be at least 10 digits"),
-  amount: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-    message: "Amount must be a positive number",
-  }),
-  projectId: z.string().optional(),
-  donationType: z.enum(["general", "gurukul", "library", "orphanage", "oldage"]),
-  message: z.string().optional(),
-  paymentMethod: z.enum(["esewa", "khalti", "stripe"]),
-})
+import { useState } from "react"
+import { useTranslation } from "@/hooks/use-translation"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Loader2, Heart, CreditCard, Banknote, Smartphone, Building2, Wallet } from "lucide-react"
+import { toast } from "sonner"
+
+const paymentMethods = [
+  { id: "esewa", name: "eSewa", icon: Wallet, description: "Digital wallet payment" },
+  { id: "khalti", name: "Khalti", icon: Smartphone, description: "Mobile payment" },
+  { id: "paypal", name: "PayPal", icon: CreditCard, description: "International payment" },
+  { id: "stripe", name: "Credit/Debit Card", icon: CreditCard, description: "Visa, Mastercard, etc." },
+  { id: "imepay", name: "IME Pay", icon: Smartphone, description: "Mobile banking" },
+  { id: "connectips", name: "ConnectIPS", icon: Building2, description: "Internet banking" },
+  { id: "bank", name: "Bank Transfer", icon: Building2, description: "Direct bank transfer" },
+  { id: "cash", name: "Cash Payment", icon: Banknote, description: "Pay at office" },
+]
+
+const currencies = [
+  { code: "NPR", symbol: "Rs.", name: "Nepali Rupee" },
+  { code: "USD", symbol: "$", name: "US Dollar" },
+  { code: "EUR", symbol: "€", name: "Euro" },
+  { code: "GBP", symbol: "£", name: "British Pound" },
+]
+
+const predefinedAmounts = {
+  NPR: [500, 1000, 2500, 5000, 10000],
+  USD: [5, 10, 25, 50, 100],
+  EUR: [5, 10, 25, 50, 100],
+  GBP: [5, 10, 25, 50, 100],
+}
 
 export default function DonatePage() {
-  const searchParams = useSearchParams()
-  const categoryParam = searchParams.get("category")
-  const projectParam = searchParams.get("project")
-
-  const [isLoading, setIsLoading] = useState(false)
-  const [isSuccess, setIsSuccess] = useState(false)
-
-  // Map URL parameter to donation type
-  const getDonationType = () => {
-    switch (categoryParam) {
-      case "general-fund":
-        return "general"
-      case "gurukul":
-        return "gurukul"
-      case "library":
-        return "library"
-      case "orphanage":
-        return "orphanage"
-      case "oldage-homes":
-        return "oldage"
-      default:
-        return "general"
-    }
-  }
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      donorName: "",
-      donorEmail: "",
-      donorPhone: "",
-      amount: "",
-      projectId: projectParam || "",
-      donationType: getDonationType(),
-      message: "",
-      paymentMethod: "esewa",
-    },
+  const { translate } = useTranslation()
+  const [loading, setLoading] = useState(false)
+  const [currency, setCurrency] = useState("NPR")
+  const [amount, setAmount] = useState("")
+  const [customAmount, setCustomAmount] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState("")
+  const [donorInfo, setDonorInfo] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    address: "",
+    message: "",
   })
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsLoading(true)
+  const selectedCurrency = currencies.find((c) => c.code === currency)
+  const amounts = predefinedAmounts[currency as keyof typeof predefinedAmounts] || []
 
-    try {
-      // In a real application, this would call an API endpoint
-      // For demo purposes, we'll simulate a successful donation after a delay
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      // Mock successful donation
-      setIsSuccess(true)
-
-      // In production, this would:
-      // 1. Process the payment through the selected gateway
-      // 2. Record the donation in the database
-      // 3. Generate a receipt
-      // 4. Send an email with the receipt
-    } finally {
-      setIsLoading(false)
-    }
+  const handleAmountSelect = (selectedAmount: string) => {
+    setAmount(selectedAmount)
+    setCustomAmount("")
   }
 
-  const donationTypes = [
-    { value: "general", label: "General Fund", icon: Heart, description: "Support all our initiatives" },
-    { value: "gurukul", label: "Gurukul", icon: School, description: "Support traditional education" },
-    { value: "library", label: "Library", icon: BookOpen, description: "Help expand our resources" },
-    { value: "orphanage", label: "Orphanage", icon: Home, description: "Support children in need" },
-    { value: "oldage", label: "Oldage Homes", icon: Users, description: "Support elderly care" },
-  ]
+  const handleCustomAmountChange = (value: string) => {
+    setCustomAmount(value)
+    setAmount("")
+  }
 
-  if (isSuccess) {
-    return (
-      <div className="container max-w-md mx-auto px-4 py-12">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-center text-2xl">Thank You for Your Donation!</CardTitle>
-            <CardDescription className="text-center">
-              Your generous contribution will help us continue our mission.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center">
-            <div className="flex justify-center mb-4">
-              <Heart className="h-16 w-16 text-orange-600" />
-            </div>
-            <p className="mb-4">
-              A receipt has been sent to your email address. Thank you for supporting Sanatan Dharma Bigyan Samaj.
-            </p>
-            <Button asChild className="w-full bg-orange-600 hover:bg-orange-700">
-              <a href="/">Return to Home</a>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
+  const getFinalAmount = () => {
+    return Number.parseFloat(customAmount || amount || "0")
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    const finalAmount = getFinalAmount()
+    if (finalAmount <= 0) {
+      toast.error("Please enter a valid donation amount")
+      return
+    }
+
+    if (!paymentMethod) {
+      toast.error("Please select a payment method")
+      return
+    }
+
+    if (!donorInfo.name || !donorInfo.email) {
+      toast.error("Please fill in your name and email")
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const response = await fetch("/api/payments/initiate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          method: paymentMethod,
+          amount: finalAmount,
+          currency,
+          description: `Donation to Sanatan Dharma Board Nepal - ${finalAmount} ${currency}`,
+          type: "donation",
+          customerInfo: {
+            name: donorInfo.name,
+            email: donorInfo.email,
+            phone: donorInfo.phone,
+          },
+        }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        if (result.formHtml) {
+          // For form-based payments (eSewa, IME Pay, ConnectIPS)
+          const newWindow = window.open("", "_blank")
+          if (newWindow) {
+            newWindow.document.write(result.formHtml)
+            newWindow.document.close()
+          }
+        } else if (result.redirectUrl) {
+          // For redirect-based payments (Khalti, PayPal, Stripe)
+          window.location.href = result.redirectUrl
+        }
+      } else {
+        toast.error(result.error || "Payment initiation failed")
+      }
+    } catch (error) {
+      console.error("Donation error:", error)
+      toast.error("An error occurred while processing your donation")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div className="container max-w-2xl mx-auto px-4 py-12">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Make a Donation</CardTitle>
-          <CardDescription>Your generous donations help us preserve and promote Sanatan Dharma values.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="donorName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Your Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter your name" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 py-12">
+      <div className="container mx-auto px-4">
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-100 rounded-full mb-6">
+              <Heart className="w-8 h-8 text-orange-600" />
+            </div>
+            <h1 className="text-4xl font-bold text-gray-900 mb-4">{translate("Make a Donation")}</h1>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              {translate("Support our mission to preserve and promote Sanatan Dharma values and culture")}
+            </p>
+          </div>
 
-                <FormField
-                  control={form.control}
-                  name="donorEmail"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="Enter your email" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="donorPhone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter your phone number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Donation Amount (NPR)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="Enter amount" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="donationType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Donation Type</FormLabel>
-                    <FormControl>
-                      <RadioGroup
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        className="grid grid-cols-1 md:grid-cols-2 gap-4"
-                      >
-                        {donationTypes.map((type) => (
-                          <FormItem key={type.value} className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value={type.value} />
-                            </FormControl>
-                            <div className="flex items-center">
-                              <type.icon className="h-4 w-4 mr-2 text-orange-600" />
-                              <FormLabel className="font-normal">{type.label}</FormLabel>
-                            </div>
-                          </FormItem>
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* Donation Form */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Heart className="w-5 h-5 text-orange-600" />
+                  {translate("Donation Details")}
+                </CardTitle>
+                <CardDescription>{translate("Choose your donation amount and payment method")}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Currency Selection */}
+                  <div className="space-y-2">
+                    <Label>{translate("Currency")}</Label>
+                    <Select value={currency} onValueChange={setCurrency}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {currencies.map((curr) => (
+                          <SelectItem key={curr.code} value={curr.code}>
+                            {curr.symbol} {curr.name}
+                          </SelectItem>
                         ))}
-                      </RadioGroup>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <FormField
-                control={form.control}
-                name="message"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Message (Optional)</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Any message you'd like to include with your donation"
-                        className="resize-none"
-                        {...field}
+                  {/* Predefined Amounts */}
+                  <div className="space-y-2">
+                    <Label>{translate("Select Amount")}</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {amounts.map((amt) => (
+                        <Button
+                          key={amt}
+                          type="button"
+                          variant={amount === amt.toString() ? "default" : "outline"}
+                          onClick={() => handleAmountSelect(amt.toString())}
+                          className="h-12"
+                        >
+                          {selectedCurrency?.symbol}
+                          {amt}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Custom Amount */}
+                  <div className="space-y-2">
+                    <Label>{translate("Or Enter Custom Amount")}</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                        {selectedCurrency?.symbol}
+                      </span>
+                      <Input
+                        type="number"
+                        placeholder="0.00"
+                        value={customAmount}
+                        onChange={(e) => handleCustomAmountChange(e.target.value)}
+                        className="pl-8"
+                        min="1"
+                        step="0.01"
                       />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    </div>
+                  </div>
 
-              <FormField
-                control={form.control}
-                name="paymentMethod"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Payment Method</FormLabel>
-                    <FormDescription>Select your preferred payment method</FormDescription>
-                    <FormControl>
-                      <Tabs defaultValue={field.value} onValueChange={field.onChange} className="w-full">
-                        <TabsList className="grid w-full grid-cols-3">
-                          <TabsTrigger value="esewa">eSewa</TabsTrigger>
-                          <TabsTrigger value="khalti">Khalti</TabsTrigger>
-                          <TabsTrigger value="stripe">Stripe</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="esewa" className="p-4 border rounded-md mt-2">
-                          <p className="text-sm">Pay using eSewa digital wallet</p>
-                        </TabsContent>
-                        <TabsContent value="khalti" className="p-4 border rounded-md mt-2">
-                          <p className="text-sm">Pay using Khalti digital wallet</p>
-                        </TabsContent>
-                        <TabsContent value="stripe" className="p-4 border rounded-md mt-2">
-                          <p className="text-sm">Pay using credit/debit card via Stripe</p>
-                        </TabsContent>
-                      </Tabs>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                  {/* Payment Method */}
+                  <div className="space-y-3">
+                    <Label>{translate("Payment Method")}</Label>
+                    <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
+                      <div className="grid gap-3">
+                        {paymentMethods.map((method) => {
+                          const Icon = method.icon
+                          return (
+                            <div
+                              key={method.id}
+                              className="flex items-center space-x-2 border rounded-lg p-3 hover:bg-gray-50"
+                            >
+                              <RadioGroupItem value={method.id} id={method.id} />
+                              <Label htmlFor={method.id} className="flex items-center gap-3 cursor-pointer flex-1">
+                                <Icon className="w-5 h-5 text-gray-600" />
+                                <div>
+                                  <div className="font-medium">{method.name}</div>
+                                  <div className="text-sm text-gray-500">{method.description}</div>
+                                </div>
+                              </Label>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </RadioGroup>
+                  </div>
 
-              <Button type="submit" className="w-full bg-orange-600 hover:bg-orange-700" disabled={isLoading}>
-                {isLoading ? "Processing..." : "Donate Now"}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+                  {/* Donor Information */}
+                  <div className="space-y-4">
+                    <Label className="text-base font-semibold">{translate("Donor Information")}</Label>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">{translate("Full Name")} *</Label>
+                        <Input
+                          id="name"
+                          value={donorInfo.name}
+                          onChange={(e) => setDonorInfo((prev) => ({ ...prev, name: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="email">{translate("Email")} *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={donorInfo.email}
+                          onChange={(e) => setDonorInfo((prev) => ({ ...prev, email: e.target.value }))}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">{translate("Phone Number")}</Label>
+                        <Input
+                          id="phone"
+                          value={donorInfo.phone}
+                          onChange={(e) => setDonorInfo((prev) => ({ ...prev, phone: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="address">{translate("Address")}</Label>
+                        <Input
+                          id="address"
+                          value={donorInfo.address}
+                          onChange={(e) => setDonorInfo((prev) => ({ ...prev, address: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="message">{translate("Message (Optional)")}</Label>
+                      <Textarea
+                        id="message"
+                        placeholder={translate("Share why you're supporting our cause...")}
+                        value={donorInfo.message}
+                        onChange={(e) => setDonorInfo((prev) => ({ ...prev, message: e.target.value }))}
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <Button type="submit" className="w-full h-12 text-lg" disabled={loading || getFinalAmount() <= 0}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        {translate("Processing...")}
+                      </>
+                    ) : (
+                      <>
+                        <Heart className="w-5 h-5 mr-2" />
+                        {translate("Donate")} {selectedCurrency?.symbol}
+                        {getFinalAmount().toFixed(2)}
+                      </>
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* Donation Impact */}
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{translate("Your Impact")}</CardTitle>
+                  <CardDescription>{translate("See how your donation makes a difference")}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-4 bg-orange-50 rounded-lg">
+                    <h4 className="font-semibold text-orange-900 mb-2">Rs. 500</h4>
+                    <p className="text-orange-800 text-sm">{translate("Provides educational materials for one student")}</p>
+                  </div>
+                  <div className="p-4 bg-red-50 rounded-lg">
+                    <h4 className="font-semibold text-red-900 mb-2">Rs. 1,000</h4>
+                    <p className="text-red-800 text-sm">{translate("Supports cultural event organization")}</p>
+                  </div>
+                  <div className="p-4 bg-yellow-50 rounded-lg">
+                    <h4 className="font-semibold text-yellow-900 mb-2">Rs. 5,000</h4>
+                    <p className="text-yellow-800 text-sm">{translate("Funds community outreach programs")}</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>{translate("Secure Payment")}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3 text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      {translate("SSL encrypted transactions")}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      {translate("Multiple payment options")}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      {translate("Instant receipt generation")}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      {translate("Tax deduction certificate")}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

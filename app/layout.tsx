@@ -12,7 +12,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Sanatan Dharma Bigyan Samaj (SDB Nepal)",
-  description: "Promoting Sanatan Dharma values and education in Nepal"
+  description: "Promoting Sanatan Dharma values and education in Nepal",
 }
 
 export default function RootLayout({

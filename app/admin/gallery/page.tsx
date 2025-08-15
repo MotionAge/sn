@@ -6,16 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { FileUpload } from "@/components/ui/file-upload"
 import { Search, Upload, ImageIcon, Video, Eye, Download, Trash2 } from "lucide-react"
 import Image from "next/image"
 
 export default function GalleryPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
-  const [galleryId] = useState(`gallery-${Date.now()}`)
 
   const mediaItems = [
     {
@@ -81,40 +77,10 @@ export default function GalleryPage() {
           <h1 className="text-3xl font-bold">Gallery Management</h1>
           <p className="text-muted-foreground">Manage photos, videos, and media content</p>
         </div>
-        <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Upload className="h-4 w-4 mr-2" />
-              Upload Media
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Upload Media Files</DialogTitle>
-              <DialogDescription>
-                Upload multiple images and videos to your gallery. Files will be automatically organized and optimized.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <FileUpload
-                bucket="gallery"
-                multiple
-                maxFiles={20}
-                entityType="gallery"
-                entityId={galleryId}
-                usageType="gallery"
-                onUploadComplete={(files) => {
-                  console.log('Files uploaded:', files)
-                  // Refresh gallery or add to local state
-                  setIsUploadModalOpen(false)
-                }}
-                onUploadError={(error) => {
-                  console.error('Upload failed:', error)
-                }}
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button>
+          <Upload className="h-4 w-4 mr-2" />
+          Upload Media
+        </Button>
       </div>
 
       {/* Stats Cards */}

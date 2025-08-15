@@ -1,111 +1,89 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { type NextRequest, NextResponse } from "next/server"
+import { createServerSupabaseClient } from "@/lib/supabase"
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
-
-export async function GET(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const query = searchParams.get('q');
+    const { searchParams } = new URL(request.url)
+    const query = searchParams.get("query")
 
     if (!query) {
-      return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
+      return NextResponse.json({ error: "Query parameter is required" }, { status: 400 })
     }
 
-    // Try to find the item in different tables
-    const [membership, certificate, donation, receipt] = await Promise.all([
-      // Check membership table
-      supabase
-        .from('membership')
-        .select('*')
-        .or(`member_id.eq.${query},id.eq.${query}`)
-        .single(),
-      
-      // Check certificates table
-      supabase
-        .from('certificates')
-        .select('*')
-        .or(`certificate_number.eq.${query},id.eq.${query}`)
-        .single(),
-      
-      // Check donations table
-      supabase
-        .from('donations')
-        .select('*')
-        .or(`id.eq.${query}`)
-        .single(),
-      
-      // Check receipts table (if separate)
-      supabase
-        .from('receipts')
-        .select('*')
-        .or(`receipt_number.eq.${query},id.eq.${query}`)
+    const supabase = createServerSupabaseClient()
+
+    // Try to determine the type of query and search accordingly
+    let result = null
+    const type = ""
+
+    // Check if it's a member ID (starts with M)
+    if (query.startsWith("M")) {
+      const { data } = await supabase.from("members").select("*").eq("member_id", query).single()
+
+      if (data) {
+        result = { type: "member", found: true, data }
+      }
+    }
+    // Check if it's a certificate (starts with CERT)
+    else if (query.startsWith("CERT")) {
+      const { data } = await supabase.from("certificate_logs").select("*").eq("certificate_id", query).single()
+
+      if (data) {
+        result = { type: "certificate", found: true, data }
+      }
+    }
+    // Check if it's a donation ID (starts with D)
+    else if (query.startsWith("D")) {
+      const { data } = await supabase.from("donations").select("*").eq("donation_id", query).single()
+
+      if (data) {
+        result = { type: "donation", found: true, data }
+      }
+    }
+    // Check if it's a receipt (starts with REC)
+    else if (query.startsWith("REC")) {
+      const { data } = await supabase.from("donations").select("*").eq("receipt_number", query).single()
+
+      if (data) {
+        result = { type: "receipt", found: true, data }
+      }
+    }
+    // If no specific pattern, search across all tables
+    else {
+      // Search members by email or phone
+      const { data: memberData } = await supabase
+        .from("members")
+        .select("*")
+        .or(`email.eq.${query},phone.eq.${query}`)
         .single()
-    ]);
 
-    // Return the first found result
-    if (membership.data) {
-      return NextResponse.json({
-        type: 'membership',
-        id: membership.data.member_id || membership.data.id,
-        name: membership.data.full_name,
-        status: membership.data.status,
-        issue_date: membership.data.join_date,
-        expiry_date: membership.data.expiry_date,
-        certificate_number: membership.data.certificate_number
-      });
+      if (memberData) {
+        result = { type: "member", found: true, data: memberData }
+      } else {
+        // Search by verification code
+        const { data: certData } = await supabase
+          .from("certificate_logs")
+          .select("*")
+          .eq("verification_code", query)
+          .single()
+
+        if (certData) {
+          result = { type: "certificate", found: true, data: certData }
+        }
+      }
     }
 
-    if (certificate.data) {
-      return NextResponse.json({
-        type: 'certificate',
-        id: certificate.data.id,
-        name: certificate.data.recipient_name,
-        status: certificate.data.status,
-        issue_date: certificate.data.issued_date,
-        valid_until: certificate.data.valid_until,
-        certificate_number: certificate.data.certificate_number,
-        verification_code: certificate.data.verification_code
-      });
+    if (!result) {
+      result = {
+        type: "unknown",
+        found: false,
+        message: "No records found for the provided query. Please check the ID and try again.",
+      }
     }
 
-    if (donation.data) {
-      return NextResponse.json({
-        type: 'donation',
-        id: donation.data.id,
-        name: donation.data.donor_name,
-        status: donation.data.status,
-        issue_date: donation.data.created_at,
-        amount: donation.data.amount,
-        currency: donation.data.currency,
-        purpose: donation.data.purpose
-      });
-    }
-
-    if (receipt.data) {
-      return NextResponse.json({
-        type: 'receipt',
-        id: receipt.data.id,
-        name: receipt.data.donor_name,
-        status: receipt.data.status,
-        issue_date: receipt.data.created_at,
-        receipt_number: receipt.data.receipt_number,
-        amount: receipt.data.amount,
-        currency: receipt.data.currency,
-        purpose: receipt.data.purpose
-      });
-    }
-
-    // If no results found
-    return NextResponse.json({ error: 'No records found for the provided query' }, { status: 404 });
-
-  } catch (err) {
-    console.error('Verification error:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(result)
+  } catch (error) {
+    console.error("Verification error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

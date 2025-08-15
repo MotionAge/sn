@@ -1,7 +1,10 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,151 +12,106 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileUpload } from "@/components/ui/file-upload"
-import { ArrowLeft, Save, AlertCircle, Calendar, Clock, MapPin, Users, DollarSign } from "lucide-react"
-import { apiClient } from "@/lib/api-client"
-import { toast } from "sonner"
-
-interface EventFormData {
-  title: string
-  description: string
-  event_date: string
-  start_time: string
-  end_time: string
-  location: string
-  category: string
-  is_paid: boolean
-  price?: number
-  max_participants?: number
-  is_active: boolean
-  image_url?: string
-}
+import { FileUpload } from "@/components/file-upload"
+import { ArrowLeft, Save, Loader2 } from "lucide-react"
 
 export default function NewEventPage() {
   const router = useRouter()
-  const [formData, setFormData] = useState<EventFormData>({
+  const [loading, setLoading] = useState(false)
+  const [formData, setFormData] = useState({
     title: "",
     description: "",
     event_date: "",
-    start_time: "",
-    end_time: "",
+    event_time: "",
     location: "",
-    category: "General",
-    is_paid: false,
-    price: 0,
-    max_participants: 100,
-    is_active: true,
-    image_url: ""
+    category: "",
+    registration_fee: 0,
+    max_attendees: "",
+    image_url: "",
+    gallery_images: [] as string[],
+    contact_person: "",
+    contact_phone: "",
+    contact_email: "",
+    status: "upcoming",
+    is_featured: false,
   })
-  const [loading, setLoading] = useState(false)
-  const [errors, setErrors] = useState<{ [K in keyof EventFormData]?: string }>({})
 
-  const handleInputChange = (field: keyof EventFormData, value: string | boolean | number) => {
-    // Type-safe value assignment
-    if (field === 'price' && typeof value === 'string') {
-      setFormData(prev => ({ ...prev, [field]: parseFloat(value) || 0 }))
-    } else if (field === 'max_participants' && typeof value === 'string') {
-      setFormData(prev => ({ ...prev, [field]: parseInt(value) || 0 }))
+  const categories = [
+    { value: "religious", label: "Religious" },
+    { value: "cultural", label: "Cultural" },
+    { value: "educational", label: "Educational" },
+    { value: "social", label: "Social Service" },
+    { value: "festival", label: "Festival" },
+    { value: "workshop", label: "Workshop" },
+  ]
+
+  const handleInputChange = (field: string, value: any) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleFileUpload = (url: string, isGallery = false) => {
+    if (isGallery) {
+      setFormData((prev) => ({
+        ...prev,
+        gallery_images: [...prev.gallery_images, url],
+      }))
     } else {
-      setFormData(prev => ({ ...prev, [field]: value }))
-    }
-    
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }))
+      setFormData((prev) => ({ ...prev, image_url: url }))
     }
   }
 
-  const validateForm = (): boolean => {
-    const newErrors: { [K in keyof EventFormData]?: string } = {}
-
-    if (!formData.title.trim()) {
-      newErrors.title = "Title is required"
-    }
-    if (!formData.description.trim()) {
-      newErrors.description = "Description is required"
-    }
-    if (!formData.event_date) {
-      newErrors.event_date = "Event date is required"
-    }
-    if (!formData.start_time) {
-      newErrors.start_time = "Start time is required"
-    }
-    if (!formData.end_time) {
-      newErrors.end_time = "End time is required"
-    }
-    if (!formData.location.trim()) {
-      newErrors.location = "Location is required"
-    }
-    if (formData.is_paid && (!formData.price || formData.price <= 0)) {
-      newErrors.price = "Price is required for paid events"
-    }
-    if (formData.max_participants && formData.max_participants <= 0) {
-      newErrors.max_participants = "Max participants must be greater than 0"
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+  const removeGalleryImage = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      gallery_images: prev.gallery_images.filter((_, i) => i !== index),
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!validateForm()) {
+
+    if (!formData.title || !formData.description || !formData.event_date || !formData.location) {
+      alert("Please fill in all required fields")
       return
     }
 
     setLoading(true)
     try {
-      const eventData = {
-        ...formData,
-        price: formData.is_paid ? Number(formData.price) || 0 : null,
-        max_participants: Number(formData.max_participants) || null
-      }
+      const response = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          max_attendees: formData.max_attendees ? Number.parseInt(formData.max_attendees) : null,
+        }),
+      })
 
-      const result = await apiClient.createEvent(eventData)
-      
-      if (result.error) {
-        toast.error(result.error)
-      } else {
-        toast.success("Event created successfully!")
+      if (response.ok) {
         router.push("/admin/events")
+      } else {
+        const error = await response.json()
+        alert(`Error: ${error.error}`)
       }
     } catch (error) {
-      toast.error("Failed to create event")
-      console.error("Event creation error:", error)
+      console.error("Error creating event:", error)
+      alert("Failed to create event")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleImageUpload = (files: any[]) => {
-    if (files.length > 0) {
-      const file = files[0]
-      setFormData(prev => ({ ...prev, image_url: file.url }))
-      toast.success("Image uploaded successfully!")
-    }
-  }
-
-  const handleImageUploadError = (error: string) => {
-    toast.error(`Image upload failed: ${error}`)
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center space-x-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => router.back()}
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
+      <div className="flex items-center gap-4">
+        <Button asChild variant="outline" size="sm">
+          <Link href="/admin/events">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Events
+          </Link>
         </Button>
         <div>
           <h1 className="text-3xl font-bold">Create New Event</h1>
-          <p className="text-muted-foreground">Plan and schedule a new event</p>
+          <p className="text-muted-foreground">Add a new event to the calendar</p>
         </div>
       </div>
 
@@ -164,7 +122,7 @@ export default function NewEventPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Event Details</CardTitle>
-                <CardDescription>Basic information about your event</CardDescription>
+                <CardDescription>Basic information about the event</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -174,11 +132,8 @@ export default function NewEventPage() {
                     value={formData.title}
                     onChange={(e) => handleInputChange("title", e.target.value)}
                     placeholder="Enter event title"
-                    className={errors.title ? "border-red-500" : ""}
+                    required
                   />
-                  {errors.title && (
-                    <p className="text-sm text-red-500">{errors.title}</p>
-                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -187,13 +142,10 @@ export default function NewEventPage() {
                     id="description"
                     value={formData.description}
                     onChange={(e) => handleInputChange("description", e.target.value)}
-                    placeholder="Describe your event..."
+                    placeholder="Describe the event"
                     rows={4}
-                    className={errors.description ? "border-red-500" : ""}
+                    required
                   />
-                  {errors.description && (
-                    <p className="text-sm text-red-500">{errors.description}</p>
-                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -204,63 +156,17 @@ export default function NewEventPage() {
                       type="date"
                       value={formData.event_date}
                       onChange={(e) => handleInputChange("event_date", e.target.value)}
-                      className={errors.event_date ? "border-red-500" : ""}
+                      required
                     />
-                    {errors.event_date && (
-                      <p className="text-sm text-red-500">{errors.event_date}</p>
-                    )}
                   </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="category">Category</Label>
-                    <Select
-                      value={formData.category}
-                      onValueChange={(value) => handleInputChange("category", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="General">General</SelectItem>
-                        <SelectItem value="Workshop">Workshop</SelectItem>
-                        <SelectItem value="Conference">Conference</SelectItem>
-                        <SelectItem value="Seminar">Seminar</SelectItem>
-                        <SelectItem value="Training">Training</SelectItem>
-                        <SelectItem value="Meeting">Meeting</SelectItem>
-                        <SelectItem value="Social">Social</SelectItem>
-                        <SelectItem value="Cultural">Cultural</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="start_time">Start Time *</Label>
+                    <Label htmlFor="event_time">Event Time</Label>
                     <Input
-                      id="start_time"
+                      id="event_time"
                       type="time"
-                      value={formData.start_time}
-                      onChange={(e) => handleInputChange("start_time", e.target.value)}
-                      className={errors.start_time ? "border-red-500" : ""}
+                      value={formData.event_time}
+                      onChange={(e) => handleInputChange("event_time", e.target.value)}
                     />
-                    {errors.start_time && (
-                      <p className="text-sm text-red-500">{errors.start_time}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="end_time">End Time *</Label>
-                    <Input
-                      id="end_time"
-                      type="time"
-                      value={formData.end_time}
-                      onChange={(e) => handleInputChange("end_time", e.target.value)}
-                      className={errors.end_time ? "border-red-500" : ""}
-                    />
-                    {errors.end_time && (
-                      <p className="text-sm text-red-500">{errors.end_time}</p>
-                    )}
                   </div>
                 </div>
 
@@ -270,11 +176,133 @@ export default function NewEventPage() {
                     id="location"
                     value={formData.location}
                     onChange={(e) => handleInputChange("location", e.target.value)}
-                    placeholder="Event location or venue"
-                    className={errors.location ? "border-red-500" : ""}
+                    placeholder="Event location"
+                    required
                   />
-                  {errors.location && (
-                    <p className="text-sm text-red-500">{errors.location}</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category *</Label>
+                    <Select value={formData.category} onValueChange={(value) => handleInputChange("category", value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((category) => (
+                          <SelectItem key={category.value} value={category.value}>
+                            {category.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="registration_fee">Registration Fee (NPR)</Label>
+                    <Input
+                      id="registration_fee"
+                      type="number"
+                      min="0"
+                      value={formData.registration_fee}
+                      onChange={(e) => handleInputChange("registration_fee", Number.parseInt(e.target.value) || 0)}
+                      placeholder="0 for free events"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="max_attendees">Maximum Attendees</Label>
+                  <Input
+                    id="max_attendees"
+                    type="number"
+                    min="1"
+                    value={formData.max_attendees}
+                    onChange={(e) => handleInputChange("max_attendees", e.target.value)}
+                    placeholder="Leave empty for unlimited"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Contact Information</CardTitle>
+                <CardDescription>Contact details for event inquiries</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="contact_person">Contact Person</Label>
+                  <Input
+                    id="contact_person"
+                    value={formData.contact_person}
+                    onChange={(e) => handleInputChange("contact_person", e.target.value)}
+                    placeholder="Contact person name"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="contact_phone">Contact Phone</Label>
+                    <Input
+                      id="contact_phone"
+                      value={formData.contact_phone}
+                      onChange={(e) => handleInputChange("contact_phone", e.target.value)}
+                      placeholder="+977-xxx-xxx-xxxx"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="contact_email">Contact Email</Label>
+                    <Input
+                      id="contact_email"
+                      type="email"
+                      value={formData.contact_email}
+                      onChange={(e) => handleInputChange("contact_email", e.target.value)}
+                      placeholder="contact@example.com"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Images</CardTitle>
+                <CardDescription>Upload event images and gallery</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Featured Image</Label>
+                  <FileUpload onUpload={(url) => handleFileUpload(url, false)} accept="image/*" maxSize={5} />
+                  {formData.image_url && <p className="text-sm text-green-600">✓ Featured image uploaded</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Gallery Images</Label>
+                  <FileUpload onUpload={(url) => handleFileUpload(url, true)} accept="image/*" maxSize={5} />
+                  {formData.gallery_images.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-green-600">
+                        ✓ {formData.gallery_images.length} gallery images uploaded
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {formData.gallery_images.map((url, index) => (
+                          <div key={index} className="relative">
+                            <img
+                              src={url || "/placeholder.svg"}
+                              alt={`Gallery ${index + 1}`}
+                              className="w-16 h-16 object-cover rounded"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeGalleryImage(index)}
+                              className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -286,118 +314,57 @@ export default function NewEventPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Event Settings</CardTitle>
-                <CardDescription>Configure event options</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="is_paid"
-                    checked={formData.is_paid}
-                    onCheckedChange={(checked) => handleInputChange("is_paid", checked)}
-                  />
-                  <Label htmlFor="is_paid">Paid Event</Label>
-                </div>
-
-                {formData.is_paid && (
-                  <div className="space-y-2">
-                    <Label htmlFor="price">Price (NPR)</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.price || ""}
-                      onChange={(e) => handleInputChange("price", parseFloat(e.target.value) || 0)}
-                      placeholder="0.00"
-                      className={errors.price ? "border-red-500" : ""}
-                    />
-                    {errors.price && (
-                      <p className="text-sm text-red-500">{errors.price}</p>
-                    )}
-                  </div>
-                )}
-
                 <div className="space-y-2">
-                  <Label htmlFor="max_participants">Max Participants</Label>
-                  <Input
-                    id="max_participants"
-                    type="number"
-                    min="1"
-                    value={formData.max_participants || ""}
-                    onChange={(e) => handleInputChange("max_participants", parseInt(e.target.value) || 0)}
-                    placeholder="100"
-                    className={errors.max_participants ? "border-red-500" : ""}
-                  />
-                  {errors.max_participants && (
-                    <p className="text-sm text-red-500">{errors.max_participants}</p>
-                  )}
+                  <Label htmlFor="status">Status</Label>
+                  <Select value={formData.status} onValueChange={(value) => handleInputChange("status", value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="upcoming">Upcoming</SelectItem>
+                      <SelectItem value="ongoing">Ongoing</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Featured Event</Label>
+                    <p className="text-sm text-muted-foreground">Show on homepage</p>
+                  </div>
                   <Switch
-                    id="is_active"
-                    checked={formData.is_active}
-                    onCheckedChange={(checked) => handleInputChange("is_active", checked)}
+                    checked={formData.is_featured}
+                    onCheckedChange={(checked) => handleInputChange("is_featured", checked)}
                   />
-                  <Label htmlFor="is_active">Active Event</Label>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Event Image</CardTitle>
-                <CardDescription>Upload a cover image for your event</CardDescription>
+                <CardTitle>Actions</CardTitle>
               </CardHeader>
               <CardContent>
-                <FileUpload
-                  bucket="event-images"
-                  path="event-covers"
-                  multiple={false}
-                  maxFiles={1}
-                  acceptedTypes={["image/*"]}
-                  maxSize={5 * 1024 * 1024} // 5MB
-                  onUploadComplete={handleImageUpload}
-                  onUploadError={handleImageUploadError}
-                  usageType="primary"
-                  entityType="event"
-                  entityId="new"
-                />
-                {formData.image_url && (
-                  <div className="mt-4">
-                    <Label>Current Image:</Label>
-                    <div className="mt-2 p-2 bg-gray-50 rounded border">
-                      <img
-                        src={formData.image_url}
-                        alt="Event cover"
-                        className="w-full h-32 object-cover rounded"
-                      />
-                    </div>
-                  </div>
-                )}
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Create Event
+                    </>
+                  )}
+                </Button>
               </CardContent>
             </Card>
           </div>
-        </div>
-
-        {/* Submit Button */}
-        <div className="flex justify-end space-x-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.back()}
-            disabled={loading}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            disabled={loading}
-            className="bg-orange-600 hover:bg-orange-700"
-          >
-            <Save className="h-4 w-4 mr-2" />
-            {loading ? "Creating..." : "Create Event"}
-          </Button>
         </div>
       </form>
     </div>

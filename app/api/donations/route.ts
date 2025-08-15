@@ -1,46 +1,81 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { type NextRequest, NextResponse } from "next/server"
+import { createServerSupabaseClient } from "@/lib/supabase"
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
-
-const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
-
-function checkAdmin(req: Request) {
-  const key = (req.headers.get('x-admin-key') || req.headers.get('authorization')) || '';
-  if (!ADMIN_API_KEY || key !== ADMIN_API_KEY) {
-    return false;
-  }
-  return true;
-}
-
-export async function GET() {
-  // return latest 100 donations by default
-  const { data, error } = await supabase.from('donations').select('*').order('created_at', { ascending: false }).limit(100);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
-}
-
-export async function POST(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    // Allow creating donation records without admin key (clients will POST after payment)
-    const body = await req.json();
-    // expected fields: donor_name, email, amount, currency, project_id (nullable), message
-    const { donor_name, email, amount, currency = 'USD', project_id = null, message = '' } = body;
-    if (!donor_name || !amount) return NextResponse.json({ error: 'donor_name and amount are required' }, { status: 400 });
+    const { searchParams } = new URL(request.url)
+    const page = Number.parseInt(searchParams.get("page") || "1")
+    const limit = Number.parseInt(searchParams.get("limit") || "10")
+    const status = searchParams.get("status") || ""
+    const countOnly = searchParams.get("count") === "true"
 
-    const insertObj = { donor_name, email, amount, currency, project_id, message };
-    const { data, error } = await supabase.from('donations').insert([insertObj]).select().single();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const supabase = createServerSupabaseClient()
 
-    // Optionally: trigger post-processing, webhooks, or update project totals here
+    let query = supabase.from("donations").select("*", { count: "exact" })
 
-    return NextResponse.json(data, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 400 });
+    if (status) {
+      query = query.eq("status", status)
+    }
+
+    if (countOnly) {
+      // Get total amount instead of count for donations
+      const { data, error } = await supabase.from("donations").select("amount").eq("status", "completed")
+
+      if (error) throw error
+
+      const totalAmount = data?.reduce((sum, donation) => sum + (donation.amount || 0), 0) || 0
+      return NextResponse.json({ success: true, totalAmount, count: data?.length || 0 })
+    }
+
+    const from = (page - 1) * limit
+    const to = from + limit - 1
+
+    const { data, error, count } = await query.range(from, to).order("created_at", { ascending: false })
+
+    if (error) {
+      throw error
+    }
+
+    return NextResponse.json({
+      success: true,
+      data,
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit),
+      },
+    })
+  } catch (error) {
+    console.error("Error fetching donations:", error)
+    return NextResponse.json({ error: "Failed to fetch donations" }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from("donations")
+      .insert([
+        {
+          ...body,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single()
+
+    if (error) {
+      throw error
+    }
+
+    return NextResponse.json({ success: true, data })
+  } catch (error) {
+    console.error("Error creating donation:", error)
+    return NextResponse.json({ error: "Failed to create donation" }, { status: 500 })
   }
 }

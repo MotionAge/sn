@@ -1,72 +1,91 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { type NextRequest, NextResponse } from "next/server"
+import { createServerSupabaseClient } from "@/lib/supabase"
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
-
-function checkAdmin(req: NextRequest) {
-  const key = req.headers.get('x-admin-key') || '';
-  if (!ADMIN_API_KEY || key !== ADMIN_API_KEY) {
-    return false;
-  }
-  return true;
-}
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabase
-      .from('blogs')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Supabase error:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const { searchParams } = new URL(request.url)
+    const page = Number.parseInt(searchParams.get("page") || "1")
+    const limit = Number.parseInt(searchParams.get("limit") || "10")
+    const search = searchParams.get("search") || ""
+    const category = searchParams.get("category") || ""
+    const status = searchParams.get("status") || "published"
+    const countOnly = searchParams.get("count") === "true"
+
+    const supabase = createServerSupabaseClient()
+
+    let query = supabase.from("blogs").select("*", { count: "exact" })
+
+    // Apply filters
+    if (search) {
+      query = query.or(
+        `title_en.ilike.%${search}%,title_ne.ilike.%${search}%,content_en.ilike.%${search}%,content_ne.ilike.%${search}%`,
+      )
     }
-    
-    return NextResponse.json(data || []);
+
+    if (category) {
+      query = query.contains("categories", [category])
+    }
+
+    if (status) {
+      query = query.eq("status", status)
+    }
+
+    if (countOnly) {
+      const { count, error } = await query
+      if (error) throw error
+      return NextResponse.json({ success: true, count })
+    }
+
+    // Apply pagination
+    const from = (page - 1) * limit
+    const to = from + limit - 1
+
+    const { data, error, count } = await query.range(from, to).order("created_at", { ascending: false })
+
+    if (error) {
+      throw error
+    }
+
+    return NextResponse.json({
+      success: true,
+      data,
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit),
+      },
+    })
   } catch (error) {
-    console.error('Unexpected error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("Error fetching blogs:", error)
+    return NextResponse.json({ error: "Failed to fetch blogs" }, { status: 500 })
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    if (!checkAdmin(req)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    const body = await req.json();
-    const { title, content, author, published = false, excerpt, image_url, category } = body;
-    
+    const body = await request.json()
+    const supabase = createServerSupabaseClient()
+
     const { data, error } = await supabase
-      .from('blogs')
-      .insert([{ 
-        title, 
-        content, 
-        author, 
-        published,
-        excerpt: excerpt || content.substring(0, 150),
-        image_url: image_url || null,
-        category: category || 'General'
-      }])
+      .from("blogs")
+      .insert([
+        {
+          ...body,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ])
       .select()
-      .single();
-    
+      .single()
+
     if (error) {
-      console.error('Supabase error:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      throw error
     }
-    
-    return NextResponse.json(data, { status: 201 });
-  } catch (err: any) {
-    console.error('Unexpected error:', err);
-    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 400 });
+
+    return NextResponse.json({ success: true, data })
+  } catch (error) {
+    console.error("Error creating blog:", error)
+    return NextResponse.json({ error: "Failed to create blog" }, { status: 500 })
   }
 }

@@ -2,144 +2,192 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useApi } from "@/hooks/use-api"
-import { apiClient } from "@/lib/api-client"
-import { Skeleton } from "@/components/ui/skeleton"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useTranslation } from "@/hooks/use-translation"
 
-interface Slide {
+interface CarouselSlide {
   id: string
-  title: string
-  description: string
+  title_en: string
+  title_ne: string
+  description_en: string
+  description_ne: string
   image_url: string
-  cta_text: string
-  cta_url: string
-  order_index: number
-  is_active: boolean
+  cta_text_en?: string
+  cta_text_ne?: string
+  cta_link?: string
 }
 
 export default function HeroCarousel() {
+  const { language } = useTranslation()
+  const [slides, setSlides] = useState<CarouselSlide[]>([])
   const [currentSlide, setCurrentSlide] = useState(0)
-  const { data: slides, loading, error, execute: fetchSlides } =  useApi(apiClient.getHeroSlides)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    async function fetchSlides() {
+      try {
+        const response = await fetch("/api/carousel-slides")
+        if (response.ok) {
+          const data = await response.json()
+          setSlides(data.data || [])
+        }
+      } catch (error) {
+        console.error("Error fetching carousel slides:", error)
+        // Fallback slides
+        setSlides([
+          {
+            id: "1",
+            title_en: "Welcome to Sanatan Dharma Bikash Nepal",
+            title_ne: "सनातन धर्म विकास नेपालमा स्वागत छ",
+            description_en: "Preserving and promoting the eternal values of Sanatan Dharma",
+            description_ne: "सनातन धर्मका शाश्वत मूल्यहरूको संरक्षण र प्रवर्धन",
+            image_url: "/placeholder.svg?height=600&width=1200&text=Hero+Image+1",
+            cta_text_en: "Learn More",
+            cta_text_ne: "थप जान्नुहोस्",
+            cta_link: "/about",
+          },
+          {
+            id: "2",
+            title_en: "Join Our Community",
+            title_ne: "हाम्रो समुदायमा सामेल हुनुहोस्",
+            description_en: "Connect with like-minded individuals on the spiritual journey",
+            description_ne: "आध्यात्मिक यात्रामा समान विचारधारा भएका व्यक्तिहरूसँग जोडिनुहोस्",
+            image_url: "/placeholder.svg?height=600&width=1200&text=Hero+Image+2",
+            cta_text_en: "Join Now",
+            cta_text_ne: "अहिले सामेल हुनुहोस्",
+            cta_link: "/membership/apply",
+          },
+          {
+            id: "3",
+            title_en: "Support Our Mission",
+            title_ne: "हाम्रो मिशनलाई सहयोग गर्नुहोस्",
+            description_en: "Help us spread the teachings of Sanatan Dharma worldwide",
+            description_ne: "सनातन धर्मका शिक्षाहरू विश्वभर फैलाउन हामीलाई सहयोग गर्नुहोस्",
+            image_url: "/placeholder.svg?height=600&width=1200&text=Hero+Image+3",
+            cta_text_en: "Donate Now",
+            cta_text_ne: "अहिले दान गर्नुहोस्",
+            cta_link: "/donate",
+          },
+        ])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
     fetchSlides()
-  }, [fetchSlides])
+  }, [])
+
+  useEffect(() => {
+    if (slides.length > 1) {
+      const timer = setInterval(() => {
+        setCurrentSlide((prev) => (prev + 1) % slides.length)
+      }, 5000)
+      return () => clearInterval(timer)
+    }
+  }, [slides.length])
 
   const nextSlide = () => {
-    if (!Array.isArray(slides) || slides.length === 0) return
-    setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1))
+    setCurrentSlide((prev) => (prev + 1) % slides.length)
   }
 
   const prevSlide = () => {
-    if (!Array.isArray(slides) || slides.length === 0) return
-    setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1))
+    setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length)
   }
 
-  // Auto-advance slides
-  useEffect(() => {
-    if (!Array.isArray(slides) || slides.length === 0) return
-    const interval = setInterval(nextSlide, 5000)
-    return () => clearInterval(interval)
-  }, [slides])
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="relative h-[500px] overflow-hidden rounded-lg">
-        <Skeleton className="h-full w-full" />
-      </div>
+      <section className="relative h-[600px] bg-gradient-to-r from-orange-100 to-red-100 flex items-center justify-center">
+        <div className="animate-pulse text-orange-600">Loading...</div>
+      </section>
     )
   }
 
-  if (error || !Array.isArray(slides) || slides.length === 0) {
+  if (slides.length === 0) {
     return (
-      <div className="relative h-[500px] overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
-        <div className="text-center text-gray-500">
-          <p>Unable to load hero content</p>
-          <Button onClick={fetchSlides} variant="outline" className="mt-2">
-            Retry
+      <section className="relative h-[600px] bg-gradient-to-r from-orange-100 to-red-100 flex items-center justify-center">
+        <div className="container mx-auto px-4 text-center">
+          <h1 className="text-5xl font-bold text-orange-800 mb-4">
+            {language === "ne" ? "सनातन धर्म विकास नेपाल" : "Sanatan Dharma Bikash Nepal"}
+          </h1>
+          <p className="text-xl text-orange-700 mb-8">
+            {language === "ne"
+              ? "सनातन धर्मका शाश्वत मूल्यहरूको संरक्षण र प्रवर्धन"
+              : "Preserving and promoting the eternal values of Sanatan Dharma"}
+          </p>
+          <Button className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 text-lg">
+            {language === "ne" ? "थप जान्नुहोस्" : "Learn More"}
           </Button>
         </div>
-      </div>
+      </section>
     )
   }
 
-  // Filter only active slides and sort by order
-  const activeSlides = (Array.isArray(slides) ? slides : [])
-    .filter((slide: Slide) => slide.is_active)
-    .sort((a: Slide, b: Slide) => a.order_index - b.order_index)
-
-  if (activeSlides.length === 0) {
-    return (
-      <div className="relative h-[500px] overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
-        <div className="text-center text-gray-500">
-          <p>No hero content available</p>
-        </div>
-      </div>
-    )
-  }
+  const currentSlideData = slides[currentSlide]
 
   return (
-    <div className="relative h-[500px] overflow-hidden rounded-lg">
-      {/* Slides */}
-      {activeSlides.map((slide: Slide, index: number) => (
-        <div
-          key={slide.id}
-          className={`absolute inset-0 transition-opacity duration-1000 ${
-            index === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none"
-          }`}
-        >
-          <div className="relative h-full w-full">
-            <Image
-              src={slide.image_url || "/placeholder.svg"}
-              alt={slide.title}
-              fill
-              className="object-cover"
-              priority={index === 0}
-            />
-            <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center">
-              <div className="container mx-auto px-4 md:px-10 text-white">
-                <h1 className="text-3xl md:text-5xl font-bold mb-4">{slide.title}</h1>
-                <p className="text-lg md:text-xl mb-6 max-w-2xl">{slide.description}</p>
-                <Button asChild size="lg" className="bg-orange-600 hover:bg-orange-700">
-                  <a href={slide.cta_url}>{slide.cta_text}</a>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
-
-      {/* Navigation buttons */}
-      <button
-        onClick={prevSlide}
-        className="absolute left-4 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition-all"
-        aria-label="Previous slide"
-      >
-        <ChevronLeft size={24} />
-      </button>
-      <button
-        onClick={nextSlide}
-        className="absolute right-4 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition-all"
-        aria-label="Next slide"
-      >
-        <ChevronRight size={24} />
-      </button>
-
-      {/* Indicators */}
-      <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2">
-        {activeSlides.map((_: any, index: number) => (
-          <button
-            key={index}
-            onClick={() => setCurrentSlide(index)}
-            className={`w-3 h-3 rounded-full transition-all ${
-              index === currentSlide ? "bg-white" : "bg-white bg-opacity-50"
-            }`}
-            aria-label={`Go to slide ${index + 1}`}
-          />
-        ))}
+    <section className="relative h-[600px] overflow-hidden">
+      <div className="relative w-full h-full">
+        <Image
+          src={currentSlideData.image_url || "/placeholder.svg"}
+          alt={language === "ne" ? currentSlideData.title_ne : currentSlideData.title_en}
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-black bg-opacity-40" />
       </div>
-    </div>
+
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="container mx-auto px-4 text-center text-white">
+          <h1 className="text-5xl font-bold mb-4">
+            {language === "ne" ? currentSlideData.title_ne : currentSlideData.title_en}
+          </h1>
+          <p className="text-xl mb-8 max-w-3xl mx-auto">
+            {language === "ne" ? currentSlideData.description_ne : currentSlideData.description_en}
+          </p>
+          {currentSlideData.cta_link && (
+            <Button asChild className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 text-lg">
+              <a href={currentSlideData.cta_link}>
+                {language === "ne" ? currentSlideData.cta_text_ne : currentSlideData.cta_text_en}
+              </a>
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {slides.length > 1 && (
+        <>
+          <Button
+            variant="outline"
+            size="icon"
+            className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/20 border-white/30 text-white hover:bg-white/30"
+            onClick={prevSlide}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/20 border-white/30 text-white hover:bg-white/30"
+            onClick={nextSlide}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+
+          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+            {slides.map((_, index) => (
+              <button
+                key={index}
+                className={`w-3 h-3 rounded-full ${
+                  index === currentSlide ? "bg-white" : "bg-white/50"
+                } transition-colors`}
+                onClick={() => setCurrentSlide(index)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </section>
   )
 }

@@ -1,119 +1,121 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
+import Link from "next/link"
+import Image from "next/image"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Search, Download, Plus, Calendar, Users, DollarSign, MapPin, AlertCircle } from "lucide-react"
-import { useEvents } from "@/hooks/use-api"
-import { apiClient } from "@/lib/api-client"
-import { toast } from "sonner"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Search, Plus, Calendar, MapPin, Users, DollarSign, Eye, Edit, Trash2, Loader2 } from "lucide-react"
 
 interface Event {
-  id: string
+  id: number
   title: string
   description: string
   event_date: string
-  start_time: string
-  end_time: string
+  event_time?: string
   location: string
   category: string
-  is_paid: boolean
-  price?: number
-  max_participants?: number
-  current_participants: number
+  registration_fee: number
+  max_attendees?: number
+  current_attendees: number
+  image_url?: string
+  contact_person?: string
+  contact_phone?: string
+  contact_email?: string
+  status: string
+  is_featured: boolean
   created_at: string
-  updated_at: string
 }
 
 export default function EventsPage() {
+  const [events, setEvents] = useState<Event[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
-  const { data, loading, error, execute: fetchEvents } = useEvents()
-  const events: Event[] = (data as Event[]) || []
-
-  // Memoize fetchEvents to avoid unnecessary re-renders
-  const fetchEventsCallback = useCallback(() => {
-    fetchEvents()
-  }, [fetchEvents])
-
-  useEffect(() => {
-    fetchEventsCallback()
-  }, [fetchEventsCallback])
-
-  const handleDeleteEvent = async (id: string) => {
-    try {
-      const result = await apiClient.deleteEvent(id)
-      if (result.error) {
-        toast.error(result.error)
-      } else {
-        toast.success("Event deleted successfully")
-        fetchEventsCallback() // Refresh the list
-      }
-    } catch (error) {
-      toast.error("Failed to delete event")
-    }
-  }
-
-  const getEventStatus = (event: Event) => {
-    const eventDate = new Date(event.event_date)
-    const today = new Date()
-    
-    if (eventDate < today) {
-      return "Completed"
-    } else if (eventDate.getTime() - today.getTime() < 7 * 24 * 60 * 60 * 1000) {
-      return "Upcoming"
-    } else {
-      return "Active"
-    }
-  }
-
-  const filteredEvents = events?.filter(event => {
-    const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.location.toLowerCase().includes(searchTerm.toLowerCase())
-    const eventStatus = getEventStatus(event)
-    const matchesStatus = statusFilter === "all" || eventStatus.toLowerCase() === statusFilter
-    return matchesSearch && matchesStatus
-  }) || []
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState<number | null>(null)
 
   const stats = [
-    { 
-      title: "Total Events", 
-      value: events?.length?.toString() || "0", 
-      icon: Calendar 
-    },
-    { 
-      title: "Active Events", 
-      value: events?.filter(e => getEventStatus(e) === "Active").length?.toString() || "0", 
-      icon: Calendar 
-    },
-    { 
-      title: "Total Registrations", 
-      value: events?.reduce((sum, e) => sum + e.current_participants, 0).toString() || "0", 
-      icon: Users 
-    },
-    { 
-      title: "Revenue Generated", 
-      value: events?.reduce((sum, e) => sum + (e.is_paid ? (e.price || 0) * e.current_participants : 0), 0).toLocaleString() || "0", 
-      icon: DollarSign 
+    { title: "Total Events", value: events.length.toString(), icon: Calendar },
+    { title: "Upcoming", value: events.filter((e) => e.status === "upcoming").length.toString(), icon: Calendar },
+    { title: "Completed", value: events.filter((e) => e.status === "completed").length.toString(), icon: Calendar },
+    {
+      title: "Total Attendees",
+      value: events.reduce((sum, e) => sum + e.current_attendees, 0).toString(),
+      icon: Users,
     },
   ]
 
+  useEffect(() => {
+    fetchEvents()
+  }, [searchTerm, categoryFilter, statusFilter])
+
+  const fetchEvents = async () => {
+    try {
+      setLoading(true)
+      const params = new URLSearchParams()
+      if (searchTerm) params.append("search", searchTerm)
+      if (categoryFilter !== "all") params.append("category", categoryFilter)
+      if (statusFilter !== "all") params.append("status", statusFilter)
+
+      const response = await fetch(`/api/events?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        setEvents(data.events || [])
+      } else {
+        console.error("Failed to fetch events")
+      }
+    } catch (error) {
+      console.error("Error fetching events:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async (eventId: number) => {
+    if (!confirm("Are you sure you want to delete this event?")) return
+
+    try {
+      setDeleteLoading(eventId)
+      const response = await fetch(`/api/events/${eventId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        setEvents(events.filter((e) => e.id !== eventId))
+      } else {
+        alert("Failed to delete event")
+      }
+    } catch (error) {
+      console.error("Error deleting event:", error)
+      alert("Failed to delete event")
+    } finally {
+      setDeleteLoading(null)
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Active":
-        return "bg-green-100 text-green-800"
-      case "Upcoming":
+      case "upcoming":
         return "bg-blue-100 text-blue-800"
-      case "Completed":
+      case "ongoing":
+        return "bg-green-100 text-green-800"
+      case "completed":
         return "bg-gray-100 text-gray-800"
-      case "Cancelled":
+      case "cancelled":
         return "bg-red-100 text-red-800"
       default:
         return "bg-gray-100 text-gray-800"
@@ -121,47 +123,33 @@ export default function EventsPage() {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     })
   }
 
-  const formatTime = (timeString: string) => {
-    return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    })
-  }
-
-  if (error) {
-    return (
-      <div className="space-y-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Failed to load events: {error}
-          </AlertDescription>
-        </Alert>
-        <Button onClick={fetchEvents} variant="outline">
-          Retry
-        </Button>
-      </div>
-    )
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-NP", {
+      style: "currency",
+      currency: "NPR",
+      maximumFractionDigits: 0,
+    }).format(amount)
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Event Management</h1>
-          <p className="text-muted-foreground">Manage events, registrations, and schedules</p>
+          <h1 className="text-3xl font-bold">Events Management</h1>
+          <p className="text-muted-foreground">Manage events, registrations, and attendees</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Event
+        <Button asChild>
+          <Link href="/admin/events/new">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Event
+          </Link>
         </Button>
       </div>
 
@@ -183,8 +171,8 @@ export default function EventsPage() {
       {/* Events Management */}
       <Card>
         <CardHeader>
-          <CardTitle>Events List</CardTitle>
-          <CardDescription>View and manage all organization events</CardDescription>
+          <CardTitle>Events</CardTitle>
+          <CardDescription>Manage all events and their details</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -197,154 +185,216 @@ export default function EventsPage() {
                 className="pl-10"
               />
             </div>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="religious">Religious</SelectItem>
+                <SelectItem value="cultural">Cultural</SelectItem>
+                <SelectItem value="educational">Educational</SelectItem>
+                <SelectItem value="social">Social</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="upcoming">Upcoming</SelectItem>
+                <SelectItem value="ongoing">Ongoing</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline">
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
           </div>
 
-          {/* Events Table */}
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Event</TableHead>
-                  <TableHead>Date & Time</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Registrations</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  // Loading skeletons
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="ml-2">Loading events...</span>
+            </div>
+          ) : events.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No events found.</p>
+              <Button asChild className="mt-4">
+                <Link href="/admin/events/new">Create your first event</Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Date & Location</TableHead>
+                    <TableHead>Attendees</TableHead>
+                    <TableHead>Fee</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {events.map((event) => (
+                    <TableRow key={event.id}>
                       <TableCell>
-                        <div className="space-y-2">
-                          <Skeleton className="h-4 w-[200px]" />
-                          <Skeleton className="h-3 w-[300px]" />
+                        <div className="flex items-center space-x-3">
+                          <div className="relative w-12 h-12 rounded-lg overflow-hidden">
+                            <Image
+                              src={event.image_url || "/placeholder.svg?height=48&width=48"}
+                              alt={event.title}
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                          <div>
+                            <div className="font-medium">{event.title}</div>
+                            <div className="text-sm text-muted-foreground capitalize">{event.category}</div>
+                            {event.is_featured && (
+                              <Badge variant="secondary" className="text-xs">
+                                Featured
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Skeleton className="h-4 w-[100px]" />
+                        <div>
+                          <div className="flex items-center text-sm">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            {formatDate(event.event_date)}
+                          </div>
+                          {event.event_time && <div className="text-xs text-muted-foreground">{event.event_time}</div>}
+                          <div className="flex items-center text-xs text-muted-foreground">
+                            <MapPin className="h-3 w-3 mr-1" />
+                            {event.location}
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <Skeleton className="h-4 w-[150px]" />
+                        <div className="flex items-center">
+                          <Users className="h-3 w-3 mr-1" />
+                          <span>{event.current_attendees}</span>
+                          {event.max_attendees && <span className="text-muted-foreground">/{event.max_attendees}</span>}
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <Skeleton className="h-4 w-[80px]" />
+                        {event.registration_fee > 0 ? (
+                          <div className="flex items-center">
+                            <DollarSign className="h-3 w-3 mr-1" />
+                            {formatCurrency(event.registration_fee)}
+                          </div>
+                        ) : (
+                          <Badge variant="outline">Free</Badge>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <Skeleton className="h-6 w-[80px] rounded-full" />
+                        <Badge className={getStatusColor(event.status)}>{event.status}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
-                          <Skeleton className="h-8 w-[80px]" />
-                          <Skeleton className="h-8 w-[60px]" />
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm" onClick={() => setSelectedEvent(event)}>
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl">
+                              <DialogHeader>
+                                <DialogTitle>{selectedEvent?.title}</DialogTitle>
+                                <DialogDescription>Event Details</DialogDescription>
+                              </DialogHeader>
+                              {selectedEvent && (
+                                <div className="space-y-4">
+                                  {selectedEvent.image_url && (
+                                    <div className="relative w-full h-48 rounded-lg overflow-hidden">
+                                      <Image
+                                        src={selectedEvent.image_url || "/placeholder.svg"}
+                                        alt={selectedEvent.title}
+                                        fill
+                                        className="object-cover"
+                                      />
+                                    </div>
+                                  )}
+                                  <div>
+                                    <h4 className="font-medium mb-2">Description</h4>
+                                    <p className="text-sm text-muted-foreground">{selectedEvent.description}</p>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                      <span className="font-medium">Date:</span> {formatDate(selectedEvent.event_date)}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">Time:</span> {selectedEvent.event_time || "TBD"}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">Location:</span> {selectedEvent.location}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">Category:</span> {selectedEvent.category}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">Fee:</span>{" "}
+                                      {selectedEvent.registration_fee > 0
+                                        ? formatCurrency(selectedEvent.registration_fee)
+                                        : "Free"}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">Attendees:</span> {selectedEvent.current_attendees}
+                                      {selectedEvent.max_attendees ? `/${selectedEvent.max_attendees}` : ""}
+                                    </div>
+                                  </div>
+                                  {selectedEvent.contact_person && (
+                                    <div>
+                                      <h4 className="font-medium mb-2">Contact Information</h4>
+                                      <div className="text-sm space-y-1">
+                                        <div>
+                                          <span className="font-medium">Person:</span> {selectedEvent.contact_person}
+                                        </div>
+                                        {selectedEvent.contact_phone && (
+                                          <div>
+                                            <span className="font-medium">Phone:</span> {selectedEvent.contact_phone}
+                                          </div>
+                                        )}
+                                        {selectedEvent.contact_email && (
+                                          <div>
+                                            <span className="font-medium">Email:</span> {selectedEvent.contact_email}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </DialogContent>
+                          </Dialog>
+                          <Button asChild variant="outline" size="sm">
+                            <Link href={`/admin/events/edit/${event.id}`}>
+                              <Edit className="h-3 w-3" />
+                            </Link>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(event.id)}
+                            disabled={deleteLoading === event.id}
+                          >
+                            {deleteLoading === event.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3" />
+                            )}
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : filteredEvents.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
-                      <div className="text-muted-foreground">
-                        {searchTerm || statusFilter !== "all" 
-                          ? "No events match your filters" 
-                          : "No events found"}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredEvents.map((event) => {
-                    const eventStatus = getEventStatus(event)
-                    return (
-                      <TableRow key={event.id}>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{event.title}</div>
-                            <div className="text-sm text-muted-foreground">{event.description}</div>
-                            <div className="flex items-center mt-1">
-                              <Badge variant="outline" className="text-xs">
-                                {event.category}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground ml-2">
-                                {event.is_paid ? `NPR ${event.price}` : "Free"}
-                              </span>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="flex items-center">
-                              <Calendar className="h-3 w-3 mr-1" />
-                              {formatDate(event.event_date)}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {formatTime(event.start_time)} - {formatTime(event.end_time)}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center">
-                            <MapPin className="h-3 w-3 mr-1" />
-                            <span className="text-sm">{event.location}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">
-                              {event.current_participants}/{event.max_participants || "∞"}
-                            </div>
-                            {event.max_participants && (
-                              <div className="text-xs text-muted-foreground">
-                                {Math.round((event.current_participants / event.max_participants) * 100)}% filled
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(eventStatus)}>{eventStatus}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2">
-                            <Button variant="outline" size="sm">
-                              <Users className="h-3 w-3 mr-1" />
-                              Participants
-                            </Button>
-                            <Button variant="outline" size="sm">
-                              Edit
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleDeleteEvent(event.id)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

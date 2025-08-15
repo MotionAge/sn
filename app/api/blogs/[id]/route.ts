@@ -1,97 +1,68 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { type NextRequest, NextResponse } from "next/server"
+import { createServerSupabaseClient } from "@/lib/supabase"
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
-
-const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
-
-function checkAdmin(req: Request) {
-  const key = (req.headers.get('x-admin-key') || req.headers.get('authorization')) || '';
-  if (!ADMIN_API_KEY || key !== ADMIN_API_KEY) {
-    return false;
-  }
-  return true;
-}
-
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { data, error } = await supabase
-      .from('blogs')
-      .select('*')
-      .eq('id', params.id)
-      .single();
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase.from("blogs").select("*").eq("id", params.id).single()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      throw error
     }
 
-    if (!data) {
-      return NextResponse.json({ error: 'Blog not found' }, { status: 404 });
-    }
+    // Increment view count
+    await supabase
+      .from("blogs")
+      .update({ views: (data.views || 0) + 1 })
+      .eq("id", params.id)
 
-    return NextResponse.json(data);
+    return NextResponse.json({ success: true, data })
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("Error fetching blog:", error)
+    return NextResponse.json({ error: "Blog not found" }, { status: 404 })
   }
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    if (!checkAdmin(req as unknown as Request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await req.json();
-    const { title, content, author, published } = body;
+    const body = await request.json()
+    const supabase = createServerSupabaseClient()
 
     const { data, error } = await supabase
-      .from('blogs')
-      .update({ title, content, author, published, updated_at: new Date().toISOString() })
-      .eq('id', params.id)
+      .from("blogs")
+      .update({
+        ...body,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", params.id)
       .select()
-      .single();
+      .single()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      throw error
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({ success: true, data })
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("Error updating blog:", error)
+    return NextResponse.json({ error: "Failed to update blog" }, { status: 500 })
   }
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    if (!checkAdmin(req as unknown as Request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const supabase = createServerSupabaseClient()
 
-    const { error } = await supabase
-      .from('blogs')
-      .delete()
-      .eq('id', params.id);
+    const { error } = await supabase.from("blogs").delete().eq("id", params.id)
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      throw error
     }
 
-    return NextResponse.json({ message: 'Blog deleted successfully' });
+    return NextResponse.json({ success: true })
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("Error deleting blog:", error)
+    return NextResponse.json({ error: "Failed to delete blog" }, { status: 500 })
   }
 }

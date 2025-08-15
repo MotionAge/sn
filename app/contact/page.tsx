@@ -15,7 +15,7 @@ import PageVideo from "@/components/page-video"
 import PageFAQ from "@/components/page-faq"
 
 const formSchema = z.object({
-  name: z.string().min(3, "Name must be at least 3 characters"),
+  name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   phone: z.string().min(10, "Phone number must be at least 10 digits"),
   subject: z.string().min(5, "Subject must be at least 5 characters"),
@@ -125,9 +125,9 @@ export default function ContactPage() {
       </section>
 
       {/* Featured Video */}
-      {/* <section className="mb-12">
+      <section className="mb-12">
         <PageVideo videoId="contact-page-video" />
-      </section> */}
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
         {/* Contact Form */}

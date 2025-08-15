@@ -1,65 +1,73 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { type NextRequest, NextResponse } from "next/server"
+import { supabase } from "@/lib/supabase"
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
-
-const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
-
-function checkAdmin(req: Request) {
-  const key = (req.headers.get('x-admin-key') || req.headers.get('authorization')) || '';
-  if (!ADMIN_API_KEY || key !== ADMIN_API_KEY) {
-    return false;
-  }
-  return true;
-}
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabase
-      .from('faqs')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const { searchParams } = new URL(request.url)
+    const page_id = searchParams.get("page_id")
+    const category = searchParams.get("category")
+
+    let query = supabase.from("faqs").select("*").eq("is_active", true).order("order_index", { ascending: true })
+
+    if (page_id) {
+      query = query.eq("page_id", page_id)
+    }
+
+    if (category) {
+      query = query.eq("category", category)
+    }
+
+    const { data: faqs, error } = await query
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("Error fetching FAQs:", error)
+      return NextResponse.json({ error: "Failed to fetch FAQs" }, { status: 500 })
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json(faqs)
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("Error in faqs GET:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    if (!checkAdmin(req as unknown as Request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const body = await request.json()
+    const { question_en, question_ne, answer_en, answer_ne, page_id, category, order_index, is_active } = body
 
-    const body = await req.json();
-    const { question, answer, category, order } = body;
-
-    if (!question || !answer) {
-      return NextResponse.json({ error: 'Question and answer are required' }, { status: 400 });
+    // Validate required fields
+    if (!question_en || !answer_en || !page_id) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
     const { data, error } = await supabase
-      .from('faqs')
-      .insert([{ question, answer, category, order }])
+      .from("faqs")
+      .insert([
+        {
+          question_en,
+          question_ne,
+          answer_en,
+          answer_ne,
+          page_id,
+          category,
+          order_index: order_index || 0,
+          is_active: is_active !== false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ])
       .select()
-      .single();
+      .single()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("Error creating FAQ:", error)
+      return NextResponse.json({ error: "Failed to create FAQ" }, { status: 500 })
     }
 
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(data, { status: 201 })
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("Error in faqs POST:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

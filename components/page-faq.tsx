@@ -1,83 +1,115 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { useApi } from "@/hooks/use-api"
-import { apiClient } from "@/lib/api-client"
-import { Skeleton } from "@/components/ui/skeleton"
-
-interface PageFAQProps {
-  pageId: string
-}
+import { Card, CardContent } from "@/components/ui/card"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { ChevronDown, HelpCircle } from "lucide-react"
+import { useTranslation } from "@/hooks/use-translation"
 
 interface FAQ {
   id: string
-  question: string
-  answer: string
+  question_en: string
+  question_ne: string
+  answer_en: string
+  answer_ne: string
+  category: string
   page_id: string
-  order_index: number
-  is_active: boolean
 }
 
-export default function PageFAQ({ pageId }: PageFAQProps) {
-  const { data: faqs, loading, error, execute: fetchFaqs } = useApi(apiClient.getFaqs)
+interface PageFAQProps {
+  pageId: string
+  limit?: number
+}
+
+export default function PageFAQ({ pageId, limit = 5 }: PageFAQProps) {
+  const { language } = useTranslation()
+  const [faqs, setFaqs] = useState<FAQ[]>([])
+  const [openItems, setOpenItems] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    fetchFaqs()
-  }, [fetchFaqs])
+    async function fetchFAQs() {
+      try {
+        const response = await fetch(`/api/faqs?page_id=${pageId}&limit=${limit}`)
+        if (response.ok) {
+          const data = await response.json()
+          setFaqs(data.data || [])
+        }
+      } catch (error) {
+        console.error("Error fetching FAQs:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
 
-  if (loading) {
+    fetchFAQs()
+  }, [pageId, limit])
+
+  const toggleItem = (id: string) => {
+    setOpenItems((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))
+  }
+
+  if (isLoading) {
     return (
       <div className="space-y-4">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="border rounded-lg p-4">
-            <Skeleton className="h-6 w-3/4 mb-2" />
-            <Skeleton className="h-4 w-full" />
-          </div>
+        {[1, 2, 3].map((i) => (
+          <Card key={i} className="animate-pulse">
+            <CardContent className="p-4">
+              <div className="h-4 bg-gray-200 rounded mb-2" />
+              <div className="h-4 bg-gray-200 rounded w-3/4" />
+            </CardContent>
+          </Card>
         ))}
       </div>
     )
   }
 
-  if (error || !faqs) {
+  if (faqs.length === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-gray-500 mb-4">Unable to load FAQs</p>
-        <button 
-          onClick={fetchFaqs}
-          className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700"
-        >
-          Retry
-        </button>
-      </div>
-    )
-  }
-
-  // Cast faqs to FAQ[] here to fix the TS error
-  const pageFaqs = (faqs as FAQ[])
-    .filter((faq) => faq.page_id === pageId && faq.is_active)
-    .sort((a, b) => a.order_index - b.order_index)
-
-  if (pageFaqs.length === 0) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-gray-500">No FAQs available for this page</p>
-      </div>
+      <Card>
+        <CardContent className="p-8 text-center">
+          <HelpCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600">No frequently asked questions available for this page.</p>
+        </CardContent>
+      </Card>
     )
   }
 
   return (
-    <Accordion type="single" collapsible className="w-full">
-      {pageFaqs.map((faq) => (
-        <AccordionItem key={faq.id} value={faq.id}>
-          <AccordionTrigger className="text-left">
-            {faq.question}
-          </AccordionTrigger>
-          <AccordionContent className="text-gray-600">
-            {faq.answer}
-          </AccordionContent>
-        </AccordionItem>
-      ))}
-    </Accordion>
+    <div className="space-y-4">
+      {faqs.map((faq) => {
+        // const question = language === "ne" ? faq.question_ne : faq.question_en
+        // const answer = language === "ne" ? faq.answer_ne : faq.answer_en
+        const question = faq.question_en
+        const answer =  faq.answer_en
+        const isOpen = openItems.includes(faq.id)
+
+        return (
+          <Card key={faq.id}>
+            <Collapsible>
+              <CollapsibleTrigger
+                className="w-full p-4 text-left hover:bg-gray-50 transition-colors"
+                onClick={() => toggleItem(faq.id)}
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-900 pr-4">{question}</h3>
+                  <ChevronDown
+                    className={`h-5 w-5 text-gray-500 transition-transform ${isOpen ? "transform rotate-180" : ""}`}
+                  />
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="pt-0 pb-4 px-4">
+                  <div
+                    className="text-gray-600 prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: answer }}
+                  />
+                </CardContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </Card>
+        )
+      })}
+    </div>
   )
 }

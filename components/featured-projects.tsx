@@ -3,134 +3,135 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { useApi } from "@/hooks/use-api"
-import { apiClient } from "@/lib/api-client"
-import { Skeleton } from "@/components/ui/skeleton"
+import { Target, Calendar, MapPin } from "lucide-react"
 
 interface Project {
   id: string
   title: string
   description: string
-  image_url: string
-  goal_amount: number
+  category: string
+  target_amount: number
   raised_amount: number
-  currency: string
-  status: string
   start_date: string
-  end_date: string | null
-  is_active: boolean
+  end_date: string
+  location: string
+  featured_image?: string
+  status: string
 }
 
 export default function FeaturedProjects() {
-  const { data: projects, loading, error, execute: fetchProjects } =  useApi(apiClient.getProjects)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    async function fetchProjects() {
+      try {
+        const response = await fetch("/api/projects?featured=true&limit=3")
+        if (response.ok) {
+          const data = await response.json()
+          setProjects(data.data || [])
+        }
+      } catch (error) {
+        console.error("Error fetching featured projects:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
     fetchProjects()
-  }, [fetchProjects])
+  }, [])
 
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat("en-NP", {
-      style: "currency",
-      currency: currency,
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
-
-  const calculateProgress = (raised: number, goal: number) => {
-    return Math.min(Math.round((raised / goal) * 100), 100)
-  }
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Card key={i} className="overflow-hidden">
-            <div className="relative h-48">
-              <Skeleton className="h-full w-full" />
-            </div>
-            <CardContent className="pt-6">
-              <Skeleton className="h-6 w-3/4 mb-2" />
-              <Skeleton className="h-4 w-full mb-4" />
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-1/2" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-1/3" />
-              </div>
+        {[1, 2, 3].map((i) => (
+          <Card key={i} className="animate-pulse">
+            <div className="h-48 bg-gray-200 rounded-t-lg" />
+            <CardContent className="p-4">
+              <div className="h-4 bg-gray-200 rounded mb-2" />
+              <div className="h-4 bg-gray-200 rounded w-3/4" />
             </CardContent>
-            <CardFooter className="flex gap-2">
-              <Skeleton className="h-10 flex-1" />
-              <Skeleton className="h-10 flex-1" />
-            </CardFooter>
           </Card>
         ))}
       </div>
     )
   }
 
-  if (error || !projects) {
+  if (projects.length === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-gray-500 mb-4">Unable to load projects</p>
-        <Button onClick={fetchProjects} variant="outline">
-          Retry
-        </Button>
-      </div>
-    )
-  }
-
-  // Filter only active and ongoing projects
-  const activeProjects = (Array.isArray(projects) ? projects : [])
-    .filter((project: Project) => project.is_active && project.status === 'ongoing')
-    .slice(0, 3)
-
-  if (activeProjects.length === 0) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-gray-500">No active projects available</p>
-      </div>
+      <Card>
+        <CardContent className="p-8 text-center">
+          <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600">No active projects at the moment.</p>
+          <p className="text-sm text-gray-500 mt-2">Check back soon for new projects!</p>
+        </CardContent>
+      </Card>
     )
   }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {activeProjects.map((project: Project) => {
-        const progress = calculateProgress(project.raised_amount, project.goal_amount)
+      {projects.map((project) => {
+        const progressPercentage = (project.raised_amount / project.target_amount) * 100
 
         return (
-          <Card key={project.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-            <div className="relative h-48">
-              <Image src={project.image_url || "/placeholder.svg"} alt={project.title} fill className="object-cover" />
-              <div className="absolute top-2 right-2 bg-orange-600 text-white text-xs font-bold px-2 py-1 rounded uppercase">
-                {project.status}
+          <Card key={project.id} className="hover:shadow-lg transition-shadow">
+            <div className="relative h-48 overflow-hidden rounded-t-lg">
+              <Image
+                src={project.featured_image || "/placeholder.svg?height=200&width=400&text=Project+Image"}
+                alt={project.title}
+                fill
+                className="object-cover"
+              />
+              <div className="absolute top-2 right-2">
+                <Badge className="bg-green-600 text-white">{project.category}</Badge>
               </div>
             </div>
-            <CardContent className="pt-6">
-              <h3 className="text-xl font-bold mb-2 text-gray-800">{project.title}</h3>
-              <p className="text-gray-600 mb-4">{project.description}</p>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium">{formatCurrency(project.raised_amount, project.currency)} raised</span>
-                  <span className="text-gray-500">of {formatCurrency(project.goal_amount, project.currency)}</span>
+            <CardHeader>
+              <CardTitle className="text-lg line-clamp-2">{project.title}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 text-sm mb-4 line-clamp-3">{project.description}</p>
+
+              <div className="space-y-2 text-sm text-gray-600 mb-4">
+                <div className="flex items-center">
+                  <MapPin className="h-4 w-4 mr-2 text-green-600" />
+                  <span className="line-clamp-1">{project.location}</span>
                 </div>
-                <Progress value={progress} className="h-2 bg-gray-200 [&_.progress-bar]:bg-orange-600" />
-                <div className="text-right text-sm text-gray-500">{progress}% complete</div>
+                <div className="flex items-center">
+                  <Calendar className="h-4 w-4 mr-2 text-green-600" />
+                  <span>
+                    {new Date(project.start_date).toLocaleDateString()} -{" "}
+                    {new Date(project.end_date).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <div className="flex justify-between text-sm mb-2">
+                  <span>Progress</span>
+                  <span>{progressPercentage.toFixed(1)}%</span>
+                </div>
+                <Progress value={progressPercentage} className="h-2" />
+                <div className="flex justify-between text-sm mt-2">
+                  <span>₹{project.raised_amount.toLocaleString()}</span>
+                  <span>₹{project.target_amount.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button asChild variant="outline" size="sm" className="flex-1 bg-transparent">
+                  <Link href={`/projects/${project.id}`}>View Details</Link>
+                </Button>
+                <Button asChild size="sm" className="flex-1 bg-green-600 hover:bg-green-700">
+                  <Link href={`/donate?project=${project.id}`}>Donate</Link>
+                </Button>
               </div>
             </CardContent>
-            <CardFooter className="flex gap-2">
-              <Button asChild className="flex-1 bg-orange-600 hover:bg-orange-700">
-                <Link href={`/donate?project=${project.id}`}>Donate</Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="flex-1 border-orange-600 text-orange-600 hover:bg-orange-50 bg-transparent"
-              >
-                <Link href={`/projects/${project.id}`}>Learn More</Link>
-              </Button>
-            </CardFooter>
           </Card>
         )
       })}

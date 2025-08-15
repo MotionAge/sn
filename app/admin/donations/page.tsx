@@ -7,134 +7,214 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Search, Download, DollarSign, TrendingUp, Users, Receipt, AlertCircle } from "lucide-react"
-import { useDonations } from "@/hooks/use-api"
-import { apiClient } from "@/lib/api-client"
-import { toast } from "sonner"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Search, DollarSign, TrendingUp, Users, Eye, Download, Loader2 } from "lucide-react"
 
 interface Donation {
-  id: string
+  id: number
   donor_name: string
-  email?: string
+  donor_email?: string
+  donor_phone?: string
   amount: number
   currency: string
-  project_id?: string
+  payment_method: string
+  transaction_id?: string
+  purpose: string
+  is_anonymous: boolean
   message?: string
+  status: string
   created_at: string
-  updated_at: string
 }
 
 export default function DonationsPage() {
-  const [searchTerm, setSearchTerm] = useState<string>("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const { data, loading, error, execute: fetchDonations } = useDonations()
-  const donations: Donation[] = (data as Donation[]) || []
+  const [donations, setDonations] = useState<Donation[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [methodFilter, setMethodFilter] = useState("all")
+  const [selectedDonation, setSelectedDonation] = useState<Donation | null>(null)
+  const [stats, setStats] = useState({
+    total: 0,
+    totalAmount: 0,
+  })
 
   useEffect(() => {
     fetchDonations()
-  }, [fetchDonations])
+  }, [searchTerm, statusFilter, methodFilter])
 
-  const handleDeleteDonation = async (id: string) => {
+  const fetchDonations = async () => {
     try {
-      const result = await apiClient.deleteDonation(id)
-      if (result.error) {
-        toast.error(result.error)
+      setLoading(true)
+      const params = new URLSearchParams()
+      if (statusFilter !== "all") params.append("status", statusFilter)
+      if (methodFilter !== "all") params.append("method", methodFilter)
+
+      const response = await fetch(`/api/donations?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        setDonations(data.donations || [])
+        setStats(data.stats || { total: 0, totalAmount: 0 })
       } else {
-        toast.success("Donation deleted successfully")
-        fetchDonations()
+        console.error("Failed to fetch donations")
       }
-    } catch {
-      toast.error("Failed to delete donation")
+    } catch (error) {
+      console.error("Error fetching donations:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const filteredDonations = donations.filter((donation: Donation) => {
-    const matchesSearch =
-      donation.donor_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (donation.email && donation.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      donation.amount.toString().includes(searchTerm)
+  const updateDonationStatus = async (donationId: number, newStatus: string) => {
+    try {
+      const response = await fetch(`/api/donations/${donationId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      })
 
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "completed" && true) || // all are completed for now
-      false
-
-    return matchesSearch && matchesStatus
-  })
-
-  const totalAmount = donations.reduce((sum: number, d: Donation) => sum + d.amount, 0)
-  const thisMonthAmount = donations
-    .filter((d: Donation) => {
-      const date = new Date(d.created_at)
-      const now = new Date()
-      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
-    })
-    .reduce((sum: number, d: Donation) => sum + d.amount, 0)
-
-  const currency = donations[0]?.currency || "NPR"
-
-  const stats = [
-    { title: "Total Donations", value: `${currency} ${totalAmount.toLocaleString()}`, icon: DollarSign },
-    { title: "This Month", value: `${currency} ${thisMonthAmount.toLocaleString()}`, icon: TrendingUp },
-    { title: "Total Donors", value: new Set(donations.map((d: Donation) => d.donor_name)).size.toString(), icon: Users },
-    { title: "Donation Count", value: donations.length.toString(), icon: Receipt },
-  ]
-
-  const getStatusColor = () => "bg-green-100 text-green-800"
-  const getPaymentMethodColor = () => "bg-blue-100 text-blue-800"
-
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
-
-  if (error) {
-    return (
-      <div className="space-y-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>Failed to load donations: {error}</AlertDescription>
-        </Alert>
-        <Button onClick={fetchDonations} variant="outline">
-          Retry
-        </Button>
-      </div>
-    )
+      if (response.ok) {
+        setDonations(donations.map((d) => (d.id === donationId ? { ...d, status: newStatus } : d)))
+      } else {
+        alert("Failed to update donation status")
+      }
+    } catch (error) {
+      console.error("Error updating donation:", error)
+      alert("Failed to update donation status")
+    }
   }
+
+  const formatCurrency = (amount: number, currency: string) => {
+    return new Intl.NumberFormat("en-NP", {
+      style: "currency",
+      currency: currency,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "bg-green-100 text-green-800"
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "failed":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getMethodColor = (method: string) => {
+    switch (method) {
+      case "esewa":
+        return "bg-green-100 text-green-800"
+      case "khalti":
+        return "bg-purple-100 text-purple-800"
+      case "bank":
+        return "bg-blue-100 text-blue-800"
+      case "cash":
+        return "bg-gray-100 text-gray-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const filteredDonations = donations.filter(
+    (donation) =>
+      donation.donor_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      donation.purpose.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (donation.transaction_id && donation.transaction_id.toLowerCase().includes(searchTerm.toLowerCase())),
+  )
+
+  const statsCards = [
+    {
+      title: "Total Donations",
+      value: stats.total.toString(),
+      icon: Users,
+      description: "All time donations",
+    },
+    {
+      title: "Total Amount",
+      value: formatCurrency(stats.totalAmount, "NPR"),
+      icon: DollarSign,
+      description: "Completed donations",
+    },
+    {
+      title: "This Month",
+      value: donations
+        .filter((d) => {
+          const donationDate = new Date(d.created_at)
+          const now = new Date()
+          return (
+            donationDate.getMonth() === now.getMonth() &&
+            donationDate.getFullYear() === now.getFullYear() &&
+            d.status === "completed"
+          )
+        })
+        .reduce((sum, d) => sum + d.amount, 0)
+        .toLocaleString(),
+      icon: TrendingUp,
+      description: "Current month total",
+    },
+    {
+      title: "Pending",
+      value: donations.filter((d) => d.status === "pending").length.toString(),
+      icon: Users,
+      description: "Awaiting verification",
+    },
+  ]
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Donation Management</h1>
-          <p className="text-muted-foreground">Track donations, generate receipts, and manage donors</p>
+          <h1 className="text-3xl font-bold">Donations Management</h1>
+          <p className="text-muted-foreground">Track and manage all donations</p>
         </div>
         <Button>
-          <Receipt className="h-4 w-4 mr-2" />
-          Generate Report
+          <Download className="h-4 w-4 mr-2" />
+          Export Report
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
+        {statsCards.map((stat) => (
           <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
               <stat.icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stat.value}</div>
+              <p className="text-xs text-muted-foreground">{stat.description}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Donations Table */}
+      {/* Donations Management */}
       <Card>
         <CardHeader>
-          <CardTitle>Donations List</CardTitle>
-          <CardDescription>View and manage all donations received</CardDescription>
+          <CardTitle>Donations</CardTitle>
+          <CardDescription>View and manage all donation records</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -158,75 +238,159 @@ export default function DonationsPage() {
                 <SelectItem value="failed">Failed</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline">
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
+            <Select value={methodFilter} onValueChange={setMethodFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by method" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Methods</SelectItem>
+                <SelectItem value="esewa">eSewa</SelectItem>
+                <SelectItem value="khalti">Khalti</SelectItem>
+                <SelectItem value="bank">Bank Transfer</SelectItem>
+                <SelectItem value="cash">Cash</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Donation ID</TableHead>
-                  <TableHead>Donor Details</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Payment Method</TableHead>
-                  <TableHead>Purpose</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
-                      <TableCell>
-                        <div className="space-y-2">
-                          <Skeleton className="h-4 w-[150px]" />
-                          <Skeleton className="h-3 w-[120px]" />
-                        </div>
-                      </TableCell>
-                      <TableCell><Skeleton className="h-4 w-[100px]" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-[80px] rounded-full" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[120px]" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-[80px] rounded-full" /></TableCell>
-                      <TableCell><Skeleton className="h-8 w-[80px]" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : filteredDonations.length === 0 ? (
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="ml-2">Loading donations...</span>
+            </div>
+          ) : filteredDonations.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No donations found.</p>
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      {searchTerm ? "No donations match your search" : "No donations found"}
-                    </TableCell>
+                    <TableHead>Donor</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Method</TableHead>
+                    <TableHead>Purpose</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ) : (
-                  filteredDonations.map((donation: Donation) => (
+                </TableHeader>
+                <TableBody>
+                  {filteredDonations.map((donation) => (
                     <TableRow key={donation.id}>
-                      <TableCell className="font-medium">{donation.id}</TableCell>
                       <TableCell>
                         <div>
-                          <div className="font-medium">{donation.donor_name}</div>
-                          <div className="text-sm text-muted-foreground">{donation.email || "No email"}</div>
-                          <div className="text-xs text-muted-foreground">{formatDate(donation.created_at)}</div>
+                          <div className="font-medium">{donation.is_anonymous ? "Anonymous" : donation.donor_name}</div>
+                          {!donation.is_anonymous && donation.donor_email && (
+                            <div className="text-sm text-muted-foreground">{donation.donor_email}</div>
+                          )}
+                          {!donation.is_anonymous && donation.donor_phone && (
+                            <div className="text-xs text-muted-foreground">{donation.donor_phone}</div>
+                          )}
                         </div>
                       </TableCell>
-                      <TableCell>{donation.currency} {donation.amount.toLocaleString()}</TableCell>
-                      <TableCell><Badge className={getPaymentMethodColor()}>Online</Badge></TableCell>
-                      <TableCell>{donation.message || "General Donation"}</TableCell>
-                      <TableCell><Badge className={getStatusColor()}>Completed</Badge></TableCell>
-                      <TableCell className="flex gap-2">
-                        <Button variant="outline" size="sm"><Receipt className="h-3 w-3 mr-1" />Receipt</Button>
-                        <Button variant="outline" size="sm">View</Button>
-                        <Button variant="destructive" size="sm" onClick={() => handleDeleteDonation(donation.id)}>Delete</Button>
+                      <TableCell>
+                        <div className="font-medium">{formatCurrency(donation.amount, donation.currency)}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getMethodColor(donation.payment_method)}>
+                          {donation.payment_method.toUpperCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="capitalize">{donation.purpose}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">{formatDate(donation.created_at)}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={donation.status}
+                          onValueChange={(value) => updateDonationStatus(donation.id, value)}
+                        >
+                          <SelectTrigger className="w-[120px]">
+                            <Badge className={getStatusColor(donation.status)}>{donation.status}</Badge>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="failed">Failed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" onClick={() => setSelectedDonation(donation)}>
+                              <Eye className="h-3 w-3" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Donation Details</DialogTitle>
+                              <DialogDescription>Complete information about this donation</DialogDescription>
+                            </DialogHeader>
+                            {selectedDonation && (
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <span className="font-medium">Donor:</span>{" "}
+                                    {selectedDonation.is_anonymous ? "Anonymous" : selectedDonation.donor_name}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Amount:</span>{" "}
+                                    {formatCurrency(selectedDonation.amount, selectedDonation.currency)}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Method:</span>{" "}
+                                    {selectedDonation.payment_method.toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Purpose:</span> {selectedDonation.purpose}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Date:</span> {formatDate(selectedDonation.created_at)}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Status:</span>{" "}
+                                    <Badge className={getStatusColor(selectedDonation.status)}>
+                                      {selectedDonation.status}
+                                    </Badge>
+                                  </div>
+                                  {selectedDonation.transaction_id && (
+                                    <div className="col-span-2">
+                                      <span className="font-medium">Transaction ID:</span>{" "}
+                                      {selectedDonation.transaction_id}
+                                    </div>
+                                  )}
+                                  {!selectedDonation.is_anonymous && selectedDonation.donor_email && (
+                                    <div className="col-span-2">
+                                      <span className="font-medium">Email:</span> {selectedDonation.donor_email}
+                                    </div>
+                                  )}
+                                  {!selectedDonation.is_anonymous && selectedDonation.donor_phone && (
+                                    <div className="col-span-2">
+                                      <span className="font-medium">Phone:</span> {selectedDonation.donor_phone}
+                                    </div>
+                                  )}
+                                </div>
+                                {selectedDonation.message && (
+                                  <div>
+                                    <span className="font-medium">Message:</span>
+                                    <p className="mt-1 text-sm text-muted-foreground">{selectedDonation.message}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </DialogContent>
+                        </Dialog>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,96 +1,132 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
-
-const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
-
-function checkAdmin(req: Request) {
-  const key = (req.headers.get('x-admin-key') || req.headers.get('authorization')) || '';
-  if (!ADMIN_API_KEY || key !== ADMIN_API_KEY) {
-    return false;
-  }
-  return true;
-}
+import { type NextRequest, NextResponse } from "next/server"
+import { createServerSupabaseClient } from "@/lib/supabase"
 
 export async function GET() {
   try {
-    // Fetch pending approvals from multiple tables
-    const [memberships, donations, eventRegistrations] = await Promise.all([
-      supabase
-        .from('membership')
-        .select('*')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('donations')
-        .select('*')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('event_registrations')
-        .select('*')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
-    ]);
+    const supabase = createServerSupabaseClient()
 
-    // Transform data to unified format
-    const approvals = [
-      ...(memberships.data || []).map((item: any) => ({
-        id: item.id,
-        type: 'membership',
-        applicant_name: item.full_name,
-        email: item.email,
-        phone: item.phone,
-        amount: item.payment_amount,
-        currency: 'NPR',
-        payment_method: item.payment_method,
-        transaction_id: item.transaction_id,
-        applied_date: item.created_at,
-        status: item.status,
-        documents: item.documents || [],
-        address: item.address
-      })),
-      ...(donations.data || []).map((item: any) => ({
-        id: item.id,
-        type: 'donation',
-        applicant_name: item.donor_name,
-        email: item.donor_email,
-        phone: item.donor_phone,
-        amount: item.amount,
-        currency: item.currency,
-        payment_method: item.payment_method,
-        transaction_id: item.transaction_id,
-        applied_date: item.created_at,
-        status: item.status,
-        purpose: item.purpose,
-        receipt_requested: item.receipt_requested
-      })),
-      ...(eventRegistrations.data || []).map((item: any) => ({
-        id: item.id,
-        type: 'event_registration',
-        applicant_name: item.participant_name,
-        email: item.participant_email,
-        phone: item.participant_phone,
-        amount: item.registration_fee,
-        currency: 'NPR',
-        payment_method: item.payment_method,
-        transaction_id: item.transaction_id,
-        applied_date: item.created_at,
-        status: item.status,
-        event_title: item.event_title,
-        event_date: item.event_date
-      }))
-    ];
+    // Get pending members
+    const { data: pendingMembers } = await supabase
+      .from("members")
+      .select("*")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
 
-    return NextResponse.json(approvals);
-  } catch (err) {
-    console.error('Unexpected error:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Get pending donations
+    const { data: pendingDonations } = await supabase
+      .from("donations")
+      .select("*")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+
+    // Get pending event registrations
+    const { data: pendingRegistrations } = await supabase
+      .from("event_registrations")
+      .select(`
+        *,
+        events (title, title_nepali)
+      `)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+
+    return NextResponse.json({
+      members: pendingMembers || [],
+      donations: pendingDonations || [],
+      registrations: pendingRegistrations || [],
+    })
+  } catch (error) {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = createServerSupabaseClient()
+    const { type, id, action, reason } = await request.json()
+
+    const approvalData = {
+      status: action === "approve" ? "approved" : "rejected",
+      approved_by: "admin", // In real app, get from session
+      approved_date: new Date().toISOString(),
+      rejection_reason: action === "reject" ? reason : null,
+    }
+
+    let result
+    let certificateData = null
+
+    switch (type) {
+      case "member":
+        result = await supabase.from("members").update(approvalData).eq("member_id", id).select()
+
+        if (action === "approve" && result.data?.[0]) {
+          // Generate certificate
+          const member = result.data[0]
+          const certificateId = `CERT-M-${Date.now()}`
+
+          certificateData = {
+            certificate_id: certificateId,
+            member_id: member.member_id,
+            member_name: member.full_name,
+            certificate_type: "membership",
+            issue_date: new Date().toISOString().split("T")[0],
+            valid_until: member.membership_type === "lifetime" ? null : member.expiry_date,
+            status: "active",
+            verification_code: `SDB-${Date.now()}-M-VERIFY`,
+            generated_by: "admin",
+          }
+
+          await supabase.from("certificate_logs").insert([certificateData])
+
+          // Update member with certificate number
+          await supabase.from("members").update({ certificate_number: certificateId }).eq("member_id", id)
+        }
+        break
+
+      case "donation":
+        result = await supabase.from("donations").update(approvalData).eq("donation_id", id).select()
+
+        if (action === "approve" && result.data?.[0]) {
+          // Generate receipt
+          const donation = result.data[0]
+          const receiptId = `REC-D-${Date.now()}`
+
+          certificateData = {
+            certificate_id: receiptId,
+            member_id: null,
+            member_name: donation.donor_name,
+            certificate_type: "donation_receipt",
+            issue_date: new Date().toISOString().split("T")[0],
+            valid_until: null,
+            status: "active",
+            verification_code: `SDB-${Date.now()}-D-VERIFY`,
+            generated_by: "admin",
+          }
+
+          await supabase.from("certificate_logs").insert([certificateData])
+
+          // Update donation with receipt number
+          await supabase.from("donations").update({ receipt_number: receiptId }).eq("donation_id", id)
+        }
+        break
+
+      case "registration":
+        result = await supabase.from("event_registrations").update(approvalData).eq("registration_id", id).select()
+        break
+
+      default:
+        return NextResponse.json({ error: "Invalid approval type" }, { status: 400 })
+    }
+
+    if (result?.error) {
+      return NextResponse.json({ error: result.error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: result?.data?.[0],
+      certificate: certificateData,
+    })
+  } catch (error) {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

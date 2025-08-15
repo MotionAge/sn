@@ -1,115 +1,153 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Search, Download, Plus, FileText, Eye, Heart, AlertCircle } from "lucide-react"
-import { useBlogs } from "@/hooks/use-api"
-import { apiClient } from "@/lib/api-client"
-import { toast } from "sonner"
-import Link from "next/link"
+import { Search, Download, Plus, FileText, Eye, Heart, MessageCircle, Share, Edit, Trash2, Loader2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
-interface Blog {
-  id: string
+interface BlogPost {
+  post_id: string
   title: string
-  content: string
+  title_english?: string
+  excerpt: string
+  excerpt_english?: string
   author: string
-  published: boolean
+  category: string
+  publish_date: string
+  status: string
+  views: number
+  likes: number
+  comments: number
+  shares: number
+  featured: boolean
   created_at: string
-  updated_at: string
 }
 
 export default function BlogsPage() {
+  const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
-
-  // Explicitly type blogs as Blog[] | null
-  const { data: blogs, loading, error, execute: fetchBlogs } = useBlogs()
-  const safeBlogs: Blog[] = Array.isArray(blogs) ? blogs : []
-
-  const fetchBlogsCallback = useCallback(() => {
-    fetchBlogs()
-  }, [fetchBlogs])
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [blogs, setBlogs] = useState<BlogPost[]>([])
+  const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [stats, setStats] = useState({
+    totalPosts: 0,
+    published: 0,
+    totalViews: 0,
+    engagement: 0,
+  })
 
   useEffect(() => {
-    fetchBlogsCallback()
-  }, [fetchBlogsCallback])
+    fetchBlogs()
+  }, [categoryFilter, statusFilter, searchTerm])
 
-  const handleDeleteBlog = async (id: string) => {
+  const fetchBlogs = async () => {
     try {
-      const result = await apiClient.deleteBlog(id)
-      if (result.error) {
-        toast.error(result.error)
-      } else {
-        toast.success("Blog deleted successfully")
-        fetchBlogsCallback()
-      }
+      setLoading(true)
+      const params = new URLSearchParams()
+      if (categoryFilter !== "all") params.append("category", categoryFilter)
+      if (statusFilter !== "all") params.append("status", statusFilter)
+      if (searchTerm) params.append("search", searchTerm)
+
+      const response = await fetch(`/api/blogs?${params}`)
+      if (!response.ok) throw new Error("Failed to fetch blogs")
+
+      const result = await response.json()
+      const blogData = result.data || []
+      setBlogs(blogData)
+
+      // Calculate stats
+      const totalPosts = blogData.length
+      const published = blogData.filter((blog: BlogPost) => blog.status === "published").length
+      const totalViews = blogData.reduce((sum: number, blog: BlogPost) => sum + (blog.views || 0), 0)
+      const engagement = blogData.reduce(
+        (sum: number, blog: BlogPost) => sum + (blog.likes || 0) + (blog.comments || 0) + (blog.shares || 0),
+        0,
+      )
+
+      setStats({ totalPosts, published, totalViews, engagement })
     } catch (error) {
-      toast.error("Failed to delete blog")
+      console.error("Error fetching blogs:", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch blog posts",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
   }
-  // Ensure blogs is treated as Blog[] or an empty array
-  const filteredBlogs: Blog[] = safeBlogs.filter((blog: Blog) => {
-    const matchesSearch =
-      blog.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      blog.content.toLowerCase().includes(searchTerm.toLowerCase())
 
-    const matchesCategory =
-      categoryFilter === "all" ||
-      (categoryFilter === "published" && blog.published) ||
-      (categoryFilter === "draft" && !blog.published)
+  const deleteBlog = async (postId: string) => {
+    if (!confirm("Are you sure you want to delete this blog post?")) return
 
-    return matchesSearch && matchesCategory
-  })
-const stats = [
-  {
-    title: "Total Posts",
-    value: safeBlogs.length.toString(),
-    icon: FileText,
-  },
-  {
-    title: "Published",
-    value: safeBlogs.filter(b => b.published).length.toString(),
-    icon: Eye,
-  },
-  {
-    title: "Drafts",
-    value: safeBlogs.filter(b => !b.published).length.toString(),
-    icon: FileText,
-  },
-  {
-    title: "Total Authors",
-    value: safeBlogs.length ? new Set(safeBlogs.map(b => b.author)).size.toString() : "0",
-    icon: Heart,
-  },
-]
+    try {
+      setDeleting(postId)
+      const response = await fetch(`/api/blogs/${postId}`, {
+        method: "DELETE",
+      })
 
-  const getStatusColor = (published: boolean) =>
-    published ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+      if (!response.ok) throw new Error("Failed to delete blog post")
 
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    })
+      toast({
+        title: "Success",
+        description: "Blog post deleted successfully",
+      })
 
-  if (error) {
+      fetchBlogs()
+    } catch (error) {
+      console.error("Error deleting blog:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete blog post",
+        variant: "destructive",
+      })
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "published":
+        return "bg-green-100 text-green-800"
+      case "draft":
+        return "bg-yellow-100 text-yellow-800"
+      case "review":
+        return "bg-blue-100 text-blue-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case "press-release":
+        return "bg-green-100 text-green-800"
+      case "past-events":
+        return "bg-blue-100 text-blue-800"
+      case "gallery":
+        return "bg-purple-100 text-purple-800"
+      case "voting-polls":
+        return "bg-orange-100 text-orange-800"
+      case "promotions":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  if (loading) {
     return (
-      <div className="space-y-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>Failed to load blogs: {error}</AlertDescription>
-        </Alert>
-        <Button onClick={fetchBlogs} variant="outline">
-          Retry
-        </Button>
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     )
   }
@@ -131,17 +169,42 @@ const stats = [
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map(stat => (
-          <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-            </CardContent>
-          </Card>
-        ))}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Posts</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalPosts}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Published</CardTitle>
+            <Eye className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.published}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Views</CardTitle>
+            <Eye className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalViews.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Engagement</CardTitle>
+            <Heart className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.engagement.toLocaleString()}</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Blog Management */}
@@ -157,18 +220,32 @@ const stats = [
               <Input
                 placeholder="Search posts..."
                 value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
               />
             </div>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="press-release">Press Release</SelectItem>
+                <SelectItem value="past-events">Past Events</SelectItem>
+                <SelectItem value="gallery">Gallery</SelectItem>
+                <SelectItem value="voting-polls">Voting/Polls</SelectItem>
+                <SelectItem value="promotions">Promotions</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Posts</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="published">Published</SelectItem>
-                <SelectItem value="draft">Drafts</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="review">Review</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline">
@@ -183,96 +260,94 @@ const stats = [
               <TableHeader>
                 <TableRow>
                   <TableHead>Post Details</TableHead>
-                  <TableHead>Author</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Engagement</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
-                  // Loading skeletons
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell>
-                        <div className="space-y-2">
-                          <Skeleton className="h-4 w-[200px]" />
-                          <Skeleton className="h-3 w-[300px]" />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-[100px]" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-6 w-[80px] rounded-full" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-[80px]" />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Skeleton className="h-8 w-[60px]" />
-                          <Skeleton className="h-8 w-[60px]" />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : filteredBlogs.length === 0 ? (
+                {blogs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8">
                       <div className="text-muted-foreground">
-                        {searchTerm || categoryFilter !== "all"
-                          ? "No blogs match your filters"
-                          : "No blogs found"}
+                        <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p className="text-lg font-medium">No blog posts found</p>
+                        <p className="text-sm">Create your first blog post to get started</p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredBlogs.map(blog => (
-                    <TableRow key={blog.id}>
+                  blogs.map((blog) => (
+                    <TableRow key={blog.post_id}>
                       <TableCell>
                         <div>
                           <div className="flex items-center">
                             <div className="font-medium">{blog.title}</div>
-                            {blog.published && (
+                            {blog.featured && (
                               <Badge variant="secondary" className="ml-2 text-xs">
-                                Published
+                                Featured
                               </Badge>
                             )}
                           </div>
-                          <div className="text-sm text-muted-foreground mt-1">
-                            {blog.content.substring(0, 100)}...
-                          </div>
+                          <div className="text-sm text-muted-foreground mt-1 line-clamp-2">{blog.excerpt}</div>
                           <div className="text-xs text-muted-foreground mt-1">
-                            Last updated: {formatDate(blog.updated_at)}
+                            by {blog.author} • {new Date(blog.publish_date).toLocaleDateString()}
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{blog.author}</div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(blog.published)}>
-                          {blog.published ? "Published" : "Draft"}
+                        <Badge className={getCategoryColor(blog.category)}>
+                          {blog.category.replace("-", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{formatDate(blog.created_at)}</div>
+                        <div className="space-y-1">
+                          <div className="flex items-center text-sm">
+                            <Eye className="h-3 w-3 mr-1" />
+                            {(blog.views || 0).toLocaleString()}
+                          </div>
+                          <div className="flex items-center space-x-3 text-xs text-muted-foreground">
+                            <span className="flex items-center">
+                              <Heart className="h-3 w-3 mr-1" />
+                              {blog.likes || 0}
+                            </span>
+                            <span className="flex items-center">
+                              <MessageCircle className="h-3 w-3 mr-1" />
+                              {blog.comments || 0}
+                            </span>
+                            <span className="flex items-center">
+                              <Share className="h-3 w-3 mr-1" />
+                              {blog.shares || 0}
+                            </span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(blog.status)}>
+                          {blog.status.charAt(0).toUpperCase() + blog.status.slice(1)}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
-                          <Button variant="outline" size="sm">
-                            View
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            Edit
+                          <Button variant="outline" size="sm" asChild>
+                            <Link href={`/admin/blogs/edit/${blog.post_id}`}>
+                              <Edit className="h-3 w-3 mr-1" />
+                              Edit
+                            </Link>
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDeleteBlog(blog.id)}
+                            onClick={() => deleteBlog(blog.post_id)}
+                            disabled={deleting === blog.post_id}
                             className="text-red-600 hover:text-red-700"
                           >
+                            {deleting === blog.post_id ? (
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3 mr-1" />
+                            )}
                             Delete
                           </Button>
                         </div>

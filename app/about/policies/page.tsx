@@ -1,76 +1,95 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { FileText, Download, Eye } from "lucide-react"
+import { FileText, Download, Eye, Loader2 } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+
+interface PolicyDocument {
+  id: string
+  title: string
+  description: string
+  file_url: string
+  file_type: string
+  file_size: string
+  last_updated: string
+  category: string
+}
+
+interface OfficialImage {
+  id: string
+  title: string
+  description: string
+  image_url: string
+  category: string
+}
 
 export default function PoliciesPage() {
-  const policies = [
-    {
-      title: "Organizational Constitution",
-      description: "Our founding document outlining the structure, objectives, and governance of SDB Nepal.",
-      type: "PDF",
-      size: "2.5 MB",
-      lastUpdated: "March 2024",
-      downloadUrl: "/documents/constitution.pdf",
-    },
-    {
-      title: "Code of Conduct",
-      description: "Guidelines for behavior and ethical standards for all members and participants.",
-      type: "PDF",
-      size: "1.2 MB",
-      lastUpdated: "January 2024",
-      downloadUrl: "/documents/code-of-conduct.pdf",
-    },
-    {
-      title: "Financial Policy",
-      description: "Transparent guidelines for financial management, donations, and expenditure.",
-      type: "PDF",
-      size: "1.8 MB",
-      lastUpdated: "February 2024",
-      downloadUrl: "/documents/financial-policy.pdf",
-    },
-    {
-      title: "Privacy Policy",
-      description: "How we collect, use, and protect personal information of our members and visitors.",
-      type: "PDF",
-      size: "900 KB",
-      lastUpdated: "December 2023",
-      downloadUrl: "/documents/privacy-policy.pdf",
-    },
-    {
-      title: "Event Guidelines",
-      description: "Comprehensive guidelines for organizing and participating in SDB Nepal events.",
-      type: "PDF",
-      size: "1.5 MB",
-      lastUpdated: "March 2024",
-      downloadUrl: "/documents/event-guidelines.pdf",
-    },
-    {
-      title: "Membership Terms",
-      description: "Terms and conditions for different types of memberships and associated benefits.",
-      type: "PDF",
-      size: "1.1 MB",
-      lastUpdated: "January 2024",
-      downloadUrl: "/documents/membership-terms.pdf",
-    },
-  ]
+  const [policies, setPolicies] = useState<PolicyDocument[]>([])
+  const [images, setImages] = useState<OfficialImage[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
 
-  const images = [
-    {
-      title: "Registration Certificate",
-      description: "Official government registration certificate of SDB Nepal.",
-      imageUrl: "/placeholder.svg?height=400&width=600",
-    },
-    {
-      title: "Tax Exemption Certificate",
-      description: "Certificate showing our tax-exempt status for charitable activities.",
-      imageUrl: "/placeholder.svg?height=400&width=600",
-    },
-    {
-      title: "Awards and Recognition",
-      description: "Various awards and recognitions received by our organization.",
-      imageUrl: "/placeholder.svg?height=400&width=600",
-    },
-  ]
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [policiesRes, imagesRes] = await Promise.all([fetch("/api/policies"), fetch("/api/official-documents")])
+
+        if (!policiesRes.ok || !imagesRes.ok) {
+          throw new Error("Failed to fetch data")
+        }
+
+        const [policiesData, imagesData] = await Promise.all([policiesRes.json(), imagesRes.json()])
+
+        setPolicies(policiesData.data || [])
+        setImages(imagesData.data || [])
+      } catch (err: any) {
+        setError(err.message || "Failed to load policies")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  const handleDownload = async (fileUrl: string, fileName: string) => {
+    try {
+      const response = await fetch(fileUrl)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error("Download failed:", error)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -85,64 +104,94 @@ export default function PoliciesPage() {
       {/* Policy Documents */}
       <section className="mb-12">
         <h2 className="text-2xl font-bold mb-6 text-orange-600">Policy Documents</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {policies.map((policy, index) => (
-            <Card key={index} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <FileText className="h-8 w-8 text-orange-600 mb-2" />
-                  <span className="text-xs bg-gray-100 px-2 py-1 rounded">{policy.type}</span>
-                </div>
-                <CardTitle className="text-lg">{policy.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 mb-4">{policy.description}</p>
-                <div className="space-y-2 text-sm text-gray-500 mb-4">
-                  <p>Size: {policy.size}</p>
-                  <p>Last Updated: {policy.lastUpdated}</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" className="flex-1 bg-orange-600 hover:bg-orange-700">
-                    <Eye className="h-4 w-4 mr-2" />
-                    View
-                  </Button>
-                  <Button size="sm" variant="outline" className="flex-1 bg-transparent">
-                    <Download className="h-4 w-4 mr-2" />
-                    Download
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {policies.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">No policy documents available at the moment.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {policies.map((policy) => (
+              <Card key={policy.id} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <FileText className="h-8 w-8 text-orange-600 mb-2" />
+                    <span className="text-xs bg-gray-100 px-2 py-1 rounded">{policy.file_type}</span>
+                  </div>
+                  <CardTitle className="text-lg">{policy.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-600 mb-4">{policy.description}</p>
+                  <div className="space-y-2 text-sm text-gray-500 mb-4">
+                    <p>Size: {policy.file_size}</p>
+                    <p>Last Updated: {new Date(policy.last_updated).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1 bg-orange-600 hover:bg-orange-700"
+                      onClick={() => window.open(policy.file_url, "_blank")}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 bg-transparent"
+                      onClick={() => handleDownload(policy.file_url, policy.title)}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Official Images */}
       <section className="mb-12">
         <h2 className="text-2xl font-bold mb-6 text-orange-600">Official Documents & Certificates</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {images.map((image, index) => (
-            <Card key={index} className="hover:shadow-lg transition-shadow">
-              <div className="relative h-48 bg-gray-100 rounded-t-lg overflow-hidden">
-                <img
-                  src={image.imageUrl || "/placeholder.svg"}
-                  alt={image.title}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <CardHeader>
-                <CardTitle className="text-lg">{image.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 mb-4">{image.description}</p>
-                <Button className="w-full bg-orange-600 hover:bg-orange-700">
-                  <Eye className="h-4 w-4 mr-2" />
-                  View Full Size
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {images.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">No official documents available at the moment.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {images.map((image) => (
+              <Card key={image.id} className="hover:shadow-lg transition-shadow">
+                <div className="relative h-48 bg-gray-100 rounded-t-lg overflow-hidden">
+                  <img
+                    src={image.image_url || "/placeholder.svg"}
+                    alt={image.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <CardHeader>
+                  <CardTitle className="text-lg">{image.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-600 mb-4">{image.description}</p>
+                  <Button
+                    className="w-full bg-orange-600 hover:bg-orange-700"
+                    onClick={() => window.open(image.image_url, "_blank")}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Full Size
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Contact for More Information */}
@@ -151,7 +200,9 @@ export default function PoliciesPage() {
         <p className="text-gray-600 mb-6">
           If you need additional documents or have questions about our policies, please don't hesitate to contact us.
         </p>
-        <Button className="bg-orange-600 hover:bg-orange-700">Contact Us</Button>
+        <Button className="bg-orange-600 hover:bg-orange-700">
+          <a href="/contact">Contact Us</a>
+        </Button>
       </section>
     </div>
   )

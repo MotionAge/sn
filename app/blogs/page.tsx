@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -7,180 +8,136 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { Calendar, User, Search, Share2, ThumbsUp, MessageCircle } from "lucide-react"
+import { Calendar, User, Search, Share2, ThumbsUp, MessageCircle, Loader2 } from "lucide-react"
 import PageVideo from "@/components/page-video"
 import PageFAQ from "@/components/page-faq"
+import { useTranslation } from "@/hooks/use-translation"
+
+interface BlogPost {
+  post_id: string
+  title: string
+  title_english?: string
+  excerpt: string
+  excerpt_english?: string
+  author: string
+  category: string
+  publish_date: string
+  status: string
+  views: number
+  likes: number
+  comments: number
+  shares: number
+  featured: boolean
+  featured_image?: string
+  tags: string[]
+}
 
 export default function BlogsPage() {
+  const { language } = useTranslation()
+  const [searchTerm, setSearchTerm] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState("all")
+  const [blogs, setBlogs] = useState<BlogPost[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
   const blogCategories = [
-    {
-      id: "press-release",
-      name: "Press Release",
-      posts: [
-        {
-          id: 1,
-          title: "SDB Nepal Announces New Gurukul Campus in Pokhara",
-          excerpt:
-            "We are excited to announce the opening of our second Gurukul campus in Pokhara, expanding our traditional education reach.",
-          image: "/placeholder.svg?height=200&width=400",
-          date: "2024-06-20",
-          author: "SDB Nepal Team",
-          readTime: "3 min read",
-          likes: 45,
-          comments: 12,
-        },
-        {
-          id: 2,
-          title: "Partnership with International Sanskrit Foundation",
-          excerpt:
-            "SDB Nepal partners with the International Sanskrit Foundation to promote Sanskrit education globally.",
-          image: "/placeholder.svg?height=200&width=400",
-          date: "2024-06-15",
-          author: "Dr. Ram Prasad Sharma",
-          readTime: "5 min read",
-          likes: 67,
-          comments: 23,
-        },
-      ],
-    },
-    {
-      id: "past-events",
-      name: "Past Events",
-      posts: [
-        {
-          id: 3,
-          title: "Highlights from Annual Dharma Conference 2023",
-          excerpt:
-            "A comprehensive report on our successful annual conference featuring renowned speakers and meaningful discussions.",
-          image: "/placeholder.svg?height=200&width=400",
-          date: "2024-01-15",
-          author: "Event Team",
-          readTime: "8 min read",
-          likes: 89,
-          comments: 34,
-        },
-        {
-          id: 4,
-          title: "Sanskrit Competition Results and Celebrations",
-          excerpt: "Celebrating the achievements of young Sanskrit scholars in our recent competition.",
-          image: "/placeholder.svg?height=200&width=400",
-          date: "2024-01-10",
-          author: "Cultural Team",
-          readTime: "6 min read",
-          likes: 56,
-          comments: 18,
-        },
-      ],
-    },
-    {
-      id: "gallery",
-      name: "Gallery",
-      posts: [
-        {
-          id: 5,
-          title: "Temple Restoration Project - Before and After",
-          excerpt: "Visual documentation of our temple restoration efforts in the Kathmandu Valley.",
-          image: "/placeholder.svg?height=200&width=400",
-          date: "2024-05-30",
-          author: "Documentation Team",
-          readTime: "4 min read",
-          likes: 123,
-          comments: 45,
-        },
-        {
-          id: 6,
-          title: "Gurukul Student Life - A Photo Journey",
-          excerpt: "Capturing the daily life and learning experiences of our Gurukul students.",
-          image: "/placeholder.svg?height=200&width=400",
-          date: "2024-05-25",
-          author: "Photography Team",
-          readTime: "5 min read",
-          likes: 78,
-          comments: 29,
-        },
-      ],
-    },
-    {
-      id: "voting-polls",
-      name: "Voting/Polls",
-      posts: [
-        {
-          id: 7,
-          title: "Community Poll: Next Cultural Program Theme",
-          excerpt:
-            "Help us decide the theme for our upcoming cultural program by participating in this community poll.",
-          image: "/placeholder.svg?height=200&width=400",
-          date: "2024-06-25",
-          author: "Community Team",
-          readTime: "2 min read",
-          likes: 34,
-          comments: 67,
-        },
-        {
-          id: 8,
-          title: "Vote for Best Sanskrit Recitation Performance",
-          excerpt: "Watch the performances and vote for your favorite Sanskrit recitation from our recent competition.",
-          image: "/placeholder.svg?height=200&width=400",
-          date: "2024-06-20",
-          author: "Cultural Team",
-          readTime: "10 min read",
-          likes: 91,
-          comments: 156,
-        },
-      ],
-    },
-    {
-      id: "promotions",
-      name: "Promotions",
-      posts: [
-        {
-          id: 9,
-          title: "Early Bird Registration for Vedic Mathematics Course",
-          excerpt: "Register early for our upcoming Vedic Mathematics course and save 30% on registration fees.",
-          image: "/placeholder.svg?height=200&width=400",
-          date: "2024-06-28",
-          author: "Education Team",
-          readTime: "3 min read",
-          likes: 67,
-          comments: 23,
-        },
-        {
-          id: 10,
-          title: "Special Membership Drive - Limited Time Offer",
-          excerpt: "Join our community with special membership benefits available for a limited time only.",
-          image: "/placeholder.svg?height=200&width=400",
-          date: "2024-06-22",
-          author: "Membership Team",
-          readTime: "4 min read",
-          likes: 45,
-          comments: 19,
-        },
-      ],
-    },
+    { id: "all", name: "All Posts", nameNepali: "सबै पोस्टहरू" },
+    { id: "press-release", name: "Press Release", nameNepali: "प्रेस विज्ञप्ति" },
+    { id: "past-events", name: "Past Events", nameNepali: "विगतका कार्यक्रमहरू" },
+    { id: "gallery", name: "Gallery", nameNepali: "ग्यालेरी" },
+    { id: "voting-polls", name: "Voting/Polls", nameNepali: "मतदान/सर्वेक्षण" },
+    { id: "promotions", name: "Promotions", nameNepali: "प्रवर्धन" },
   ]
+
+  useEffect(() => {
+    fetchBlogs()
+  }, [selectedCategory, searchTerm])
+
+  const fetchBlogs = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const params = new URLSearchParams()
+      if (selectedCategory !== "all") {
+        params.append("category", selectedCategory)
+      }
+      params.append("status", "published")
+      if (searchTerm) {
+        params.append("search", searchTerm)
+      }
+
+      const response = await fetch(`/api/blogs?${params}`)
+      if (!response.ok) throw new Error("Failed to fetch blogs")
+
+      const result = await response.json()
+      setBlogs(result.data || [])
+    } catch (error) {
+      console.error("Error fetching blogs:", error)
+      setError("Failed to load blog posts. Please try again later.")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString("en-US", {
+    return date.toLocaleDateString(language === "ne" ? "ne-NP" : "en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
     })
   }
 
-  const sharePost = (postId: number, title: string) => {
-    // Mock share functionality
-    console.log(`Sharing post ${postId}: ${title}`)
+  const sharePost = async (postId: string, title: string) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: title,
+          url: `${window.location.origin}/blogs/${postId}`,
+        })
+      } catch (error) {
+        console.log("Error sharing:", error)
+      }
+    } else {
+      // Fallback: copy to clipboard
+      navigator.clipboard.writeText(`${window.location.origin}/blogs/${postId}`)
+      alert("Link copied to clipboard!")
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center py-8">
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={fetchBlogs}>Try Again</Button>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Hero Section */}
       <section className="text-center mb-12">
-        <h1 className="text-4xl font-bold mb-4 text-orange-600">Blogs & Updates</h1>
+        <h1 className="text-4xl font-bold mb-4 text-orange-600">
+          {language === "ne" ? "ब्लग र अपडेटहरू" : "Blogs & Updates"}
+        </h1>
         <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-          Stay updated with our latest news, events, and insights from the world of Sanatan Dharma. Share your thoughts
-          and engage with our community.
+          {language === "ne"
+            ? "हाम्रा नवीनतम समाचार, कार्यक्रमहरू, र सनातन धर्मको संसारबाट अन्तर्दृष्टिहरूसँग अपडेट रहनुहोस्।"
+            : "Stay updated with our latest news, events, and insights from the world of Sanatan Dharma."}
         </p>
       </section>
 
@@ -188,101 +145,137 @@ export default function BlogsPage() {
       <section className="mb-8">
         <div className="max-w-md mx-auto relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input type="text" placeholder="Search blogs..." className="pl-10 pr-4 py-2 w-full" />
+          <Input
+            type="text"
+            placeholder={language === "ne" ? "ब्लगहरू खोज्नुहोस्..." : "Search blogs..."}
+            className="pl-10 pr-4 py-2 w-full"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
       </section>
 
       {/* Featured Video */}
-      {/* <section className="mb-12">
+      <section className="mb-12">
         <PageVideo videoId="blogs-page-video" />
-      </section> */}
+      </section>
 
       {/* Blog Categories */}
       <section className="mb-12">
-        <Tabs defaultValue="press-release" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+        <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6">
             {blogCategories.map((category) => (
               <TabsTrigger key={category.id} value={category.id} className="text-xs">
-                {category.name}
+                {language === "ne" ? category.nameNepali : category.name}
               </TabsTrigger>
             ))}
           </TabsList>
 
-          {blogCategories.map((category) => (
-            <TabsContent key={category.id} value={category.id} className="mt-8">
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-orange-600">{category.name}</h2>
+          <TabsContent value={selectedCategory} className="mt-8">
+            {blogs.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-muted-foreground">
+                  <Search className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <h3 className="text-xl font-medium mb-2">
+                    {language === "ne" ? "कुनै ब्लग पोस्ट फेला परेन" : "No blog posts found"}
+                  </h3>
+                  <p className="text-sm">
+                    {language === "ne"
+                      ? "यस श्रेणीमा कुनै ब्लग पोस्टहरू उपलब्ध छैनन्।"
+                      : "No blog posts are available in this category."}
+                  </p>
+                </div>
               </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {blogs.map((post) => {
+                  const title = language === "ne" ? post.title : post.title_english || post.title
+                  const excerpt = language === "ne" ? post.excerpt : post.excerpt_english || post.excerpt
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {category.posts.map((post) => (
-                  <Card key={post.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                    <div className="relative h-48">
-                      <Image src={post.image || "/placeholder.svg"} alt={post.title} fill className="object-cover" />
-                      <Badge className="absolute top-2 right-2 bg-orange-600">{category.name}</Badge>
-                    </div>
-
-                    <CardHeader>
-                      <CardTitle className="text-lg line-clamp-2">{post.title}</CardTitle>
-                    </CardHeader>
-
-                    <CardContent>
-                      <p className="text-gray-600 mb-4 line-clamp-3">{post.excerpt}</p>
-
-                      <div className="flex items-center text-sm text-gray-500 mb-4">
-                        <div className="flex items-center mr-4">
-                          <Calendar size={14} className="mr-1" />
-                          <span>{formatDate(post.date)}</span>
-                        </div>
-                        <div className="flex items-center mr-4">
-                          <User size={14} className="mr-1" />
-                          <span>{post.author}</span>
-                        </div>
-                        <span>{post.readTime}</span>
+                  return (
+                    <Card key={post.post_id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                      <div className="relative h-48">
+                        <Image
+                          src={post.featured_image || "/placeholder.svg?height=200&width=400"}
+                          alt={title}
+                          fill
+                          className="object-cover"
+                        />
+                        <Badge className="absolute top-2 right-2 bg-orange-600">
+                          {blogCategories.find((cat) => cat.id === post.category)?.[
+                            language === "ne" ? "nameNepali" : "name"
+                          ] || post.category}
+                        </Badge>
+                        {post.featured && (
+                          <Badge className="absolute top-2 left-2 bg-yellow-600">
+                            {language === "ne" ? "फिचर्ड" : "Featured"}
+                          </Badge>
+                        )}
                       </div>
 
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4 text-sm text-gray-500">
-                          <div className="flex items-center">
-                            <ThumbsUp size={14} className="mr-1" />
-                            <span>{post.likes}</span>
+                      <CardHeader>
+                        <CardTitle className="text-lg line-clamp-2">{title}</CardTitle>
+                      </CardHeader>
+
+                      <CardContent>
+                        <p className="text-gray-600 mb-4 line-clamp-3">{excerpt}</p>
+
+                        <div className="flex items-center text-sm text-gray-500 mb-4">
+                          <div className="flex items-center mr-4">
+                            <Calendar size={14} className="mr-1" />
+                            <span>{formatDate(post.publish_date)}</span>
                           </div>
-                          <div className="flex items-center">
-                            <MessageCircle size={14} className="mr-1" />
-                            <span>{post.comments}</span>
+                          <div className="flex items-center mr-4">
+                            <User size={14} className="mr-1" />
+                            <span>{post.author}</span>
                           </div>
                         </div>
 
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => sharePost(post.id, post.title)}
-                            className="p-2"
-                          >
-                            <Share2 size={14} />
-                          </Button>
-                          <Button asChild size="sm" className="bg-orange-600 hover:bg-orange-700">
-                            <Link href={`/blogs/${post.id}`}>Read More</Link>
-                          </Button>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4 text-sm text-gray-500">
+                            <div className="flex items-center">
+                              <ThumbsUp size={14} className="mr-1" />
+                              <span>{post.likes || 0}</span>
+                            </div>
+                            <div className="flex items-center">
+                              <MessageCircle size={14} className="mr-1" />
+                              <span>{post.comments || 0}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => sharePost(post.post_id, title)}
+                              className="p-2"
+                            >
+                              <Share2 size={14} />
+                            </Button>
+                            <Button asChild size="sm" className="bg-orange-600 hover:bg-orange-700">
+                              <Link href={`/blogs/${post.post_id}`}>{language === "ne" ? "पढ्नुहोस्" : "Read More"}</Link>
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
               </div>
+            )}
 
-              {/* Load More Button */}
+            {/* Load More Button */}
+            {blogs.length > 0 && (
               <div className="text-center mt-8">
                 <Button
                   variant="outline"
                   className="border-orange-600 text-orange-600 hover:bg-orange-50 bg-transparent"
                 >
-                  Load More Posts
+                  {language === "ne" ? "थप पोस्टहरू लोड गर्नुहोस्" : "Load More Posts"}
                 </Button>
               </div>
-            </TabsContent>
-          ))}
+            )}
+          </TabsContent>
         </Tabs>
       </section>
 
@@ -290,9 +283,13 @@ export default function BlogsPage() {
       <section className="mb-12">
         <Card className="bg-orange-50 border-orange-200">
           <CardContent className="p-6 text-center">
-            <h3 className="text-xl font-bold mb-4 text-orange-600">Share Our Content</h3>
+            <h3 className="text-xl font-bold mb-4 text-orange-600">
+              {language === "ne" ? "हाम्रो सामग्री साझा गर्नुहोस्" : "Share Our Content"}
+            </h3>
             <p className="text-gray-700 mb-6">
-              Help us spread the word about Sanatan Dharma values by sharing our content on social media.
+              {language === "ne"
+                ? "सामाजिक सञ्जालमा हाम्रो सामग्री साझा गरेर सनातन धर्मका मूल्यहरू फैलाउन मद्दत गर्नुहोस्।"
+                : "Help us spread the word about Sanatan Dharma values by sharing our content on social media."}
             </p>
             <div className="flex justify-center space-x-4">
               <Button variant="outline" size="sm" className="bg-blue-600 text-white border-blue-600 hover:bg-blue-700">
@@ -314,7 +311,9 @@ export default function BlogsPage() {
 
       {/* FAQ Section */}
       <section className="mb-12">
-        <h2 className="text-3xl font-bold mb-6 text-orange-600">Frequently Asked Questions</h2>
+        <h2 className="text-3xl font-bold mb-6 text-orange-600">
+          {language === "ne" ? "बारम्बार सोधिने प्रश्नहरू" : "Frequently Asked Questions"}
+        </h2>
         <PageFAQ pageId="blogs" />
       </section>
     </div>
