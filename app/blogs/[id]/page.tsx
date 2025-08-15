@@ -64,8 +64,10 @@ export default function BlogDetailPage() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: language === "ne" ? blog?.title_ne : blog?.title_en,
-          text: language === "ne" ? blog?.excerpt_ne : blog?.excerpt_en,
+          title:  blog?.title_en,
+          text:  blog?.excerpt_en,
+          // title: language === "ne" ? blog?.title_ne : blog?.title_en,
+          // text: language === "ne" ? blog?.excerpt_ne : blog?.excerpt_en,
           url: window.location.href,
         })
       } catch (error) {
@@ -106,8 +108,10 @@ export default function BlogDetailPage() {
     )
   }
 
-  const title = language === "ne" ? blog.title_ne : blog.title_en
-  const content = language === "ne" ? blog.content_ne : blog.content_en
+  // const title = language === "ne" ? blog.title_ne : blog.title_en
+  // const content = language === "ne" ? blog.content_ne : blog.content_en
+  const title =  blog.title_en
+  const content =  blog.content_en
 
   return (
     <div className="container mx-auto px-4 py-8">
