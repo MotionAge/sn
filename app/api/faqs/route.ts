@@ -1,8 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = getSupabaseClient()
+    if (!supabase) {
+      return NextResponse.json({ error: "Database connection unavailable" }, { status: 503 })
+    }
     const { searchParams } = new URL(request.url)
     const page_id = searchParams.get("page_id")
     const category = searchParams.get("category")
@@ -33,6 +37,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabaseClient()
+    if (!supabase) {
+      return NextResponse.json({ error: "Database connection unavailable" }, { status: 503 })
+    }
     const body = await request.json()
     const { question_en, question_ne, answer_en, answer_ne, page_id, category, order_index, is_active } = body
 

@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-//import { FileUpload } from "@/components/file-upload"
+import { FileUpload } from "@/components/file-upload"
 import { ArrowLeft, Save, Loader2, X } from "lucide-react"
 import Link from "next/link"
 
@@ -221,8 +221,8 @@ export default function NewLibraryItemPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Main File *</Label>
-                  {/* <FileUpload
-                    onUpload={(url, size) => handleFileUpload("file_url", url, size)}
+                  <FileUpload
+                    onUpload={(fileData) => handleFileUpload("file_url", fileData.url, fileData.size)}
                     accept={
                       formData.type === "image"
                         ? "image/*"
@@ -233,13 +233,13 @@ export default function NewLibraryItemPage() {
                             : ".pdf"
                     }
                     maxSize={formData.type === "video" ? 500 : 50} // 500MB for video, 50MB for others
-                  /> */}
+                  />
                   {formData.file_url && <p className="text-sm text-green-600">✓ File uploaded successfully</p>}
                 </div>
 
                 <div className="space-y-2">
                   <Label>Thumbnail (Optional)</Label>
-                  {/* <FileUpload onUpload={(url) => handleFileUpload("thumbnail_url", url)} accept="image/*" maxSize={5} /> */}
+                  <FileUpload onUpload={(url) => handleFileUpload("thumbnail_url", url)} accept="image/*" maxSize={5} />
                   {formData.thumbnail_url && (
                     <p className="text-sm text-green-600">✓ Thumbnail uploaded successfully</p>
                   )}

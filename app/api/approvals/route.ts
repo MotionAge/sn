@@ -1,9 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase" // ✅ use your helper
 
 export async function GET() {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = createClient()
+    if (!supabase) {
+      return NextResponse.json({ error: "Supabase not initialized" }, { status: 500 })
+    }
 
     // Get pending members
     const { data: pendingMembers } = await supabase
@@ -41,7 +44,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = createClient()
+    if (!supabase) {
+      return NextResponse.json({ error: "Supabase not initialized" }, { status: 500 })
+    }
+
     const { type, id, action, reason } = await request.json()
 
     const approvalData = {

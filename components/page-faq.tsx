@@ -9,9 +9,7 @@ import { useTranslation } from "@/hooks/use-translation"
 interface FAQ {
   id: string
   question_en: string
-  question_ne: string
   answer_en: string
-  answer_ne: string
   category: string
   page_id: string
 }
@@ -78,10 +76,8 @@ export default function PageFAQ({ pageId, limit = 5 }: PageFAQProps) {
   return (
     <div className="space-y-4">
       {faqs.map((faq) => {
-        // const question = language === "ne" ? faq.question_ne : faq.question_en
-        // const answer = language === "ne" ? faq.answer_ne : faq.answer_en
         const question = faq.question_en
-        const answer =  faq.answer_en
+        const answer = faq.answer_en
         const isOpen = openItems.includes(faq.id)
 
         return (

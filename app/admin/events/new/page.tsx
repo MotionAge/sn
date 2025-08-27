@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-//import { FileUpload } from "@/components/file-upload"
+import { FileUpload } from "@/components/file-upload"
 import { ArrowLeft, Save, Loader2 } from "lucide-react"
 
 export default function NewEventPage() {
@@ -272,13 +272,13 @@ export default function NewEventPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Featured Image</Label>
-                  {/* <FileUpload onUpload={(url) => handleFileUpload(url, false)} accept="image/*" maxSize={5} />*/}
-                  {formData.image_url && <p className="text-sm text-green-600">✓ Featured image uploaded</p>} 
+                  <FileUpload onUpload={(url) => handleFileUpload(url, false)} accept="image/*" maxSize={5} />
+                  {formData.image_url && <p className="text-sm text-green-600">✓ Featured image uploaded</p>}
                 </div>
 
                 <div className="space-y-2">
                   <Label>Gallery Images</Label>
-                  {/* <FileUpload onUpload={(url) => handleFileUpload(url, true)} accept="image/*" maxSize={5} /> */}
+                  <FileUpload onUpload={(url) => handleFileUpload(url, true)} accept="image/*" maxSize={5} />
                   {formData.gallery_images.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-sm text-green-600">

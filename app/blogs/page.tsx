@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input"
 import { Calendar, User, Search, Share2, ThumbsUp, MessageCircle, Loader2 } from "lucide-react"
 import PageVideo from "@/components/page-video"
 import PageFAQ from "@/components/page-faq"
-import { useTranslation } from "@/hooks/use-translation"
 
 interface BlogPost {
   post_id: string
@@ -33,7 +32,6 @@ interface BlogPost {
 }
 
 export default function BlogsPage() {
-  const { language } = useTranslation()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [blogs, setBlogs] = useState<BlogPost[]>([])
@@ -41,12 +39,12 @@ export default function BlogsPage() {
   const [error, setError] = useState<string | null>(null)
 
   const blogCategories = [
-    { id: "all", name: "All Posts", nameNepali: "सबै पोस्टहरू" },
-    { id: "press-release", name: "Press Release", nameNepali: "प्रेस विज्ञप्ति" },
-    { id: "past-events", name: "Past Events", nameNepali: "विगतका कार्यक्रमहरू" },
-    { id: "gallery", name: "Gallery", nameNepali: "ग्यालेरी" },
-    { id: "voting-polls", name: "Voting/Polls", nameNepali: "मतदान/सर्वेक्षण" },
-    { id: "promotions", name: "Promotions", nameNepali: "प्रवर्धन" },
+    { id: "all", name: "All Posts" },
+    { id: "press-release", name: "Press Release" },
+    { id: "past-events", name: "Past Events" },
+    { id: "gallery", name: "Gallery" },
+    { id: "voting-polls", name: "Voting/Polls" },
+    { id: "promotions", name: "Promotions" },
   ]
 
   useEffect(() => {
@@ -82,7 +80,7 @@ export default function BlogsPage() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString(language === "ne" ? "ne-NP" : "en-US", {
+    return date.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -100,7 +98,6 @@ export default function BlogsPage() {
         console.log("Error sharing:", error)
       }
     } else {
-      // Fallback: copy to clipboard
       navigator.clipboard.writeText(`${window.location.origin}/blogs/${postId}`)
       alert("Link copied to clipboard!")
     }
@@ -131,13 +128,9 @@ export default function BlogsPage() {
     <div className="container mx-auto px-4 py-8">
       {/* Hero Section */}
       <section className="text-center mb-12">
-        <h1 className="text-4xl font-bold mb-4 text-orange-600">
-          {language === "ne" ? "ब्लग र अपडेटहरू" : "Blogs & Updates"}
-        </h1>
+        <h1 className="text-4xl font-bold mb-4 text-orange-600">Blogs & Updates</h1>
         <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-          {language === "ne"
-            ? "हाम्रा नवीनतम समाचार, कार्यक्रमहरू, र सनातन धर्मको संसारबाट अन्तर्दृष्टिहरूसँग अपडेट रहनुहोस्।"
-            : "Stay updated with our latest news, events, and insights from the world of Sanatan Dharma."}
+          Stay updated with our latest news, events, and insights from the world of Sanatan Dharma.
         </p>
       </section>
 
@@ -147,7 +140,7 @@ export default function BlogsPage() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             type="text"
-            placeholder={language === "ne" ? "ब्लगहरू खोज्नुहोस्..." : "Search blogs..."}
+            placeholder="Search blogs..."
             className="pl-10 pr-4 py-2 w-full"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -166,7 +159,7 @@ export default function BlogsPage() {
           <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6">
             {blogCategories.map((category) => (
               <TabsTrigger key={category.id} value={category.id} className="text-xs">
-                {language === "ne" ? category.nameNepali : category.name}
+                {category.name}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -176,21 +169,15 @@ export default function BlogsPage() {
               <div className="text-center py-12">
                 <div className="text-muted-foreground">
                   <Search className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <h3 className="text-xl font-medium mb-2">
-                    {language === "ne" ? "कुनै ब्लग पोस्ट फेला परेन" : "No blog posts found"}
-                  </h3>
-                  <p className="text-sm">
-                    {language === "ne"
-                      ? "यस श्रेणीमा कुनै ब्लग पोस्टहरू उपलब्ध छैनन्।"
-                      : "No blog posts are available in this category."}
-                  </p>
+                  <h3 className="text-xl font-medium mb-2">No blog posts found</h3>
+                  <p className="text-sm">No blog posts are available in this category.</p>
                 </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {blogs.map((post) => {
-                  const title = language === "ne" ? post.title : post.title_english || post.title
-                  const excerpt = language === "ne" ? post.excerpt : post.excerpt_english || post.excerpt
+                  const title = post.title_english || post.title
+                  const excerpt = post.excerpt_english || post.excerpt
 
                   return (
                     <Card key={post.post_id} className="overflow-hidden hover:shadow-lg transition-shadow">
@@ -202,15 +189,9 @@ export default function BlogsPage() {
                           className="object-cover"
                         />
                         <Badge className="absolute top-2 right-2 bg-orange-600">
-                          {blogCategories.find((cat) => cat.id === post.category)?.[
-                            language === "ne" ? "nameNepali" : "name"
-                          ] || post.category}
+                          {blogCategories.find((cat) => cat.id === post.category)?.name || post.category}
                         </Badge>
-                        {post.featured && (
-                          <Badge className="absolute top-2 left-2 bg-yellow-600">
-                            {language === "ne" ? "फिचर्ड" : "Featured"}
-                          </Badge>
-                        )}
+                        {post.featured && <Badge className="absolute top-2 left-2 bg-yellow-600">Featured</Badge>}
                       </div>
 
                       <CardHeader>
@@ -244,16 +225,11 @@ export default function BlogsPage() {
                           </div>
 
                           <div className="flex items-center space-x-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => sharePost(post.post_id, title)}
-                              className="p-2"
-                            >
+                            <Button size="sm" variant="ghost" onClick={() => sharePost(post.post_id, title)} className="p-2">
                               <Share2 size={14} />
                             </Button>
                             <Button asChild size="sm" className="bg-orange-600 hover:bg-orange-700">
-                              <Link href={`/blogs/${post.post_id}`}>{language === "ne" ? "पढ्नुहोस्" : "Read More"}</Link>
+                              <Link href={`/blogs/${post.post_id}`}>Read More</Link>
                             </Button>
                           </div>
                         </div>
@@ -267,11 +243,8 @@ export default function BlogsPage() {
             {/* Load More Button */}
             {blogs.length > 0 && (
               <div className="text-center mt-8">
-                <Button
-                  variant="outline"
-                  className="border-orange-600 text-orange-600 hover:bg-orange-50 bg-transparent"
-                >
-                  {language === "ne" ? "थप पोस्टहरू लोड गर्नुहोस्" : "Load More Posts"}
+                <Button variant="outline" className="border-orange-600 text-orange-600 hover:bg-orange-50 bg-transparent">
+                  Load More Posts
                 </Button>
               </div>
             )}
@@ -279,17 +252,13 @@ export default function BlogsPage() {
         </Tabs>
       </section>
 
-      {/* Social Media Share Options */}
+      {/* Social Media Share */}
       <section className="mb-12">
         <Card className="bg-orange-50 border-orange-200">
           <CardContent className="p-6 text-center">
-            <h3 className="text-xl font-bold mb-4 text-orange-600">
-              {language === "ne" ? "हाम्रो सामग्री साझा गर्नुहोस्" : "Share Our Content"}
-            </h3>
+            <h3 className="text-xl font-bold mb-4 text-orange-600">Share Our Content</h3>
             <p className="text-gray-700 mb-6">
-              {language === "ne"
-                ? "सामाजिक सञ्जालमा हाम्रो सामग्री साझा गरेर सनातन धर्मका मूल्यहरू फैलाउन मद्दत गर्नुहोस्।"
-                : "Help us spread the word about Sanatan Dharma values by sharing our content on social media."}
+              Help us spread the word about Sanatan Dharma values by sharing our content on social media.
             </p>
             <div className="flex justify-center space-x-4">
               <Button variant="outline" size="sm" className="bg-blue-600 text-white border-blue-600 hover:bg-blue-700">
@@ -311,9 +280,7 @@ export default function BlogsPage() {
 
       {/* FAQ Section */}
       <section className="mb-12">
-        <h2 className="text-3xl font-bold mb-6 text-orange-600">
-          {language === "ne" ? "बारम्बार सोधिने प्रश्नहरू" : "Frequently Asked Questions"}
-        </h2>
+        <h2 className="text-3xl font-bold mb-6 text-orange-600">Frequently Asked Questions</h2>
         <PageFAQ pageId="blogs" />
       </section>
     </div>

@@ -1,8 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase"
 
 export async function GET() {
   try {
+    const supabase = getSupabaseClient()
+    if (!supabase) {
+      return NextResponse.json({ error: "Database connection unavailable" }, { status: 503 })
+    }
     const { data: settings, error } = await supabase
       .from("site_settings")
       .select("*")
@@ -31,6 +35,10 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
+    const supabase = getSupabaseClient()
+    if (!supabase) {
+      return NextResponse.json({ error: "Database connection unavailable" }, { status: 503 })
+    }
     const body = await request.json()
 
     // Update multiple settings

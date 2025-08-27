@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Save, Eye, Plus, X, Loader2, ArrowLeft } from "lucide-react"
-//import FileUpload from "@/components/file-upload"
+import FileUpload from "@/components/file-upload"
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 
@@ -305,14 +305,14 @@ export default function NewBlogPage() {
               <CardTitle>Featured Image</CardTitle>
             </CardHeader>
             <CardContent>
-              {/* <FileUpload
+              <FileUpload
                 onUpload={(url) => setFormData({ ...formData, featuredImage: url })}
                 accept="image/*"
                 folder="blog-images"
                 maxSize={5}
                 label="Upload Featured Image"
                 currentFile={formData.featuredImage}
-              /> */}
+              />
             </CardContent>
           </Card>
 
@@ -323,13 +323,13 @@ export default function NewBlogPage() {
               <CardDescription>Add multiple images to the gallery</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* <FileUpload
+              <FileUpload
                 onUpload={addToGallery}
                 accept="image/*"
                 folder="blog-gallery"
                 maxSize={5}
                 label="Add to Gallery"
-              /> */}
+              />
 
               {formData.gallery.length > 0 && (
                 <div className="grid grid-cols-2 gap-2">

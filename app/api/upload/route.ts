@@ -1,13 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { writeFile, mkdir } from "fs/promises"
-import { existsSync } from "fs"
-import path from "path"
+import { blobStorage } from "@/lib/blob-storage"
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     const file = formData.get("file") as File
     const folder = (formData.get("folder") as string) || "general"
+    const metadata = formData.get("metadata") ? JSON.parse(formData.get("metadata") as string) : {}
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
@@ -19,54 +18,70 @@ export async function POST(request: NextRequest) {
       "image/png",
       "image/gif",
       "image/webp",
+      "image/svg+xml",
       "application/pdf",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "audio/mpeg",
+      "audio/wav",
+      "audio/ogg",
+      "video/mp4",
+      "video/webm",
+      "video/ogg",
+      "text/plain",
+      "application/json",
     ]
 
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json({ error: "File type not allowed" }, { status: 400 })
     }
 
-    // Validate file size (10MB max)
-    const maxSize = 10 * 1024 * 1024 // 10MB
+    // Validate file size (500MB max for videos, 50MB for others)
+    const maxSize = file.type.startsWith("video/") ? 500 * 1024 * 1024 : 50 * 1024 * 1024
     if (file.size > maxSize) {
-      return NextResponse.json({ error: "File too large. Max size is 10MB" }, { status: 400 })
+      const maxSizeMB = file.type.startsWith("video/") ? 500 : 50
+      return NextResponse.json({ error: `File too large. Max size is ${maxSizeMB}MB` }, { status: 400 })
     }
 
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-
-    // Create unique filename
-    const timestamp = Date.now()
-    const originalName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_")
-    const filename = `${timestamp}_${originalName}`
-
-    // Create upload directory if it doesn't exist
-    const uploadDir = path.join(process.cwd(), "public", "uploads", folder)
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true })
-    }
-
-    // Write file
-    const filepath = path.join(uploadDir, filename)
-    await writeFile(filepath, buffer)
-
-    // Return file URL
-    const fileUrl = `/uploads/${folder}/${filename}`
+    // Upload to blob storage
+    const result = await blobStorage.uploadFile(file, file.name, folder, {
+      ...metadata,
+      uploadedAt: new Date().toISOString(),
+      originalSize: file.size,
+      mimeType: file.type,
+    })
 
     return NextResponse.json({
       success: true,
       data: {
-        filename,
+        filename: result.pathname.split("/").pop(),
         originalName: file.name,
-        size: file.size,
-        type: file.type,
-        url: fileUrl,
+        size: result.size,
+        type: result.contentType,
+        url: result.url,
+        pathname: result.pathname,
+        folder,
       },
     })
   } catch (error) {
     console.error("Upload error:", error)
     return NextResponse.json({ error: "Upload failed" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { pathname } = await request.json()
+
+    if (!pathname) {
+      return NextResponse.json({ error: "No pathname provided" }, { status: 400 })
+    }
+
+    await blobStorage.deleteFile(pathname)
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Delete error:", error)
+    return NextResponse.json({ error: "Delete failed" }, { status: 500 })
   }
 }

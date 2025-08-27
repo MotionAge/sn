@@ -1,29 +1,27 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import Image from "next/image"
-import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Target, Calendar, MapPin } from "lucide-react"
+import { Target, MapPin, Calendar } from "lucide-react"
+import { useTranslation } from "@/hooks/use-translation"
 
 interface Project {
   id: string
-  title: string
-  description: string
-  category: string
+  title_en: string
+  description_en: string
   target_amount: number
   raised_amount: number
   start_date: string
   end_date: string
-  location: string
-  featured_image?: string
-  status: string
+  location_en?: string
+  image_url?: string
+  is_featured: boolean
 }
 
 export default function FeaturedProjects() {
+  const { language } = useTranslation()
   const [projects, setProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -31,12 +29,15 @@ export default function FeaturedProjects() {
     async function fetchProjects() {
       try {
         const response = await fetch("/api/projects?featured=true&limit=3")
+
         if (response.ok) {
-          const data = await response.json()
-          setProjects(data.data || [])
+          const result = await response.json()
+          if (result.success && result.data) {
+            setProjects(result.data)
+          }
         }
       } catch (error) {
-        console.error("Error fetching featured projects:", error)
+        console.warn("Error fetching featured projects:", error)
       } finally {
         setIsLoading(false)
       }
@@ -45,96 +46,147 @@ export default function FeaturedProjects() {
     fetchProjects()
   }, [])
 
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[1, 2, 3].map((i) => (
-          <Card key={i} className="animate-pulse">
-            <div className="h-48 bg-gray-200 rounded-t-lg" />
-            <CardContent className="p-4">
-              <div className="h-4 bg-gray-200 rounded mb-2" />
-              <div className="h-4 bg-gray-200 rounded w-3/4" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    )
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "NPR",
+      minimumFractionDigits: 0,
+    }).format(amount)
   }
 
-  if (projects.length === 0) {
+  const calculateProgress = (raised: number, target: number) => {
+    return Math.min((raised / target) * 100, 100)
+  }
+
+  if (isLoading) {
     return (
-      <Card>
-        <CardContent className="p-8 text-center">
-          <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">No active projects at the moment.</p>
-          <p className="text-sm text-gray-500 mt-2">Check back soon for new projects!</p>
-        </CardContent>
-      </Card>
+      <section className="py-16">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              Featured Projects
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="animate-pulse">
+                <div className="h-48 bg-gray-200 rounded-t-lg"></div>
+                <CardHeader>
+                  <div className="h-6 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="h-4 bg-gray-200 rounded"></div>
+                    <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
     )
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {projects.map((project) => {
-        const progressPercentage = (project.raised_amount / project.target_amount) * 100
+    <section className="py-16">
+      <div className="container mx-auto px-4">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">
+            Featured Projects
+          </h2>
+          <p className="text-gray-600 max-w-2xl mx-auto">
+            Support our ongoing projects and help us make a difference in the community
+          </p>
+        </div>
 
-        return (
-          <Card key={project.id} className="hover:shadow-lg transition-shadow">
-            <div className="relative h-48 overflow-hidden rounded-t-lg">
-              <Image
-                src={project.featured_image || "/placeholder.svg?height=200&width=400&text=Project+Image"}
-                alt={project.title}
-                fill
-                className="object-cover"
-              />
-              <div className="absolute top-2 right-2">
-                <Badge className="bg-green-600 text-white">{project.category}</Badge>
-              </div>
-            </div>
-            <CardHeader>
-              <CardTitle className="text-lg line-clamp-2">{project.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 text-sm mb-4 line-clamp-3">{project.description}</p>
+        {projects.length === 0 ? (
+          <div className="text-center py-12">
+            <Target className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">
+              No active projects
+            </h3>
+            <p className="text-gray-500">
+              Check back soon for new projects
+            </p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {projects.map((project) => {
+              const progress = calculateProgress(project.raised_amount, project.target_amount)
 
-              <div className="space-y-2 text-sm text-gray-600 mb-4">
-                <div className="flex items-center">
-                  <MapPin className="h-4 w-4 mr-2 text-green-600" />
-                  <span className="line-clamp-1">{project.location}</span>
-                </div>
-                <div className="flex items-center">
-                  <Calendar className="h-4 w-4 mr-2 text-green-600" />
-                  <span>
-                    {new Date(project.start_date).toLocaleDateString()} -{" "}
-                    {new Date(project.end_date).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
+              return (
+                <Card key={project.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                  <div className="relative h-48 bg-gradient-to-r from-green-100 to-blue-100">
+                    {project.image_url ? (
+                      <img
+                        src={project.image_url || "/placeholder.svg"}
+                        alt={project.title_en}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Target className="h-16 w-16 text-green-600" />
+                      </div>
+                    )}
+                  </div>
+                  <CardHeader>
+                    <CardTitle className="text-lg">{project.title_en}</CardTitle>
+                    <p className="text-gray-600 text-sm line-clamp-2">
+                      {project.description_en}
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span className="text-gray-600">Raised:</span>
+                          <span className="font-semibold">{formatCurrency(project.raised_amount)}</span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                        <div className="flex justify-between text-sm mt-1">
+                          <span className="text-gray-500">{progress.toFixed(1)}%</span>
+                          <span className="text-gray-600">
+                            Goal: 
+                            {formatCurrency(project.target_amount)}
+                          </span>
+                        </div>
+                      </div>
 
-              <div className="mb-4">
-                <div className="flex justify-between text-sm mb-2">
-                  <span>Progress</span>
-                  <span>{progressPercentage.toFixed(1)}%</span>
-                </div>
-                <Progress value={progressPercentage} className="h-2" />
-                <div className="flex justify-between text-sm mt-2">
-                  <span>₹{project.raised_amount.toLocaleString()}</span>
-                  <span>₹{project.target_amount.toLocaleString()}</span>
-                </div>
-              </div>
+                      <div className="space-y-2 text-sm text-gray-600">
+                        {project.location_en && (
+                          <div className="flex items-center">
+                            <MapPin className="h-4 w-4 mr-2" />
+                            <span>{project.location_en}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center">
+                          <Calendar className="h-4 w-4 mr-2" />
+                          <span>
+                            End date: 
+                            {new Date(project.end_date).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
 
-              <div className="flex gap-2">
-                <Button asChild variant="outline" size="sm" className="flex-1 bg-transparent">
-                  <Link href={`/projects/${project.id}`}>View Details</Link>
-                </Button>
-                <Button asChild size="sm" className="flex-1 bg-green-600 hover:bg-green-700">
-                  <Link href={`/donate?project=${project.id}`}>Donate</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )
-      })}
-    </div>
+                      <Button className="w-full bg-green-600 hover:bg-green-700">
+                        Contribute Now
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+
+        <div className="text-center mt-12">
+          <Button variant="outline" asChild>
+            <a href="/projects">View All Projects</a>
+          </Button>
+        </div>
+      </div>
+    </section>
   )
 }

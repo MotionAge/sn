@@ -3,429 +3,774 @@
 import type React from "react"
 
 import { useState } from "react"
-import { useTranslation } from "@/hooks/use-translation"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, Users, CreditCard, Banknote, Smartphone, Building2, Wallet } from "lucide-react"
-import { toast } from "sonner"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Users, CreditCard, Building2, Smartphone, DollarSign, Loader2 } from "lucide-react"
+import { useTranslation } from "@/hooks/use-translation"
+import { FileUpload } from "@/components/file-upload"
+import PageVideo from "@/components/page-video"
+import PageFAQ from "@/components/page-faq"
 
 const membershipTypes = [
   {
-    id: "regular",
-    name: "Regular Membership",
-    fee: 1000,
-    currency: "NPR",
-    benefits: ["Access to all events", "Monthly newsletter", "Community support", "Cultural programs"],
+    id: "basic",
+    name: "Basic Membership",
+    fee: 500,
+    duration: "1 Year",
+    benefits: ["Access to all events", "Monthly newsletter", "Community forum access", "Basic library access"],
   },
   {
     id: "premium",
     name: "Premium Membership",
-    fee: 5000,
-    currency: "NPR",
+    fee: 2000,
+    duration: "1 Year",
     benefits: [
-      "All regular benefits",
+      "All Basic benefits",
       "Priority event booking",
-      "Exclusive workshops",
+      "Exclusive content access",
+      "Full library access",
       "Personal consultation",
-      "Annual retreat access",
     ],
   },
   {
     id: "lifetime",
     name: "Lifetime Membership",
     fee: 25000,
-    currency: "NPR",
+    duration: "Lifetime",
     benefits: [
-      "All premium benefits",
-      "Lifetime validity",
+      "All Premium benefits",
+      "Lifetime access",
       "VIP event access",
-      "Board meeting participation",
-      "Legacy recognition",
+      "Annual recognition",
+      "Advisory board invitation",
     ],
   },
 ]
 
 const paymentMethods = [
-  { id: "esewa", name: "eSewa", icon: Wallet, description: "Digital wallet payment" },
-  { id: "khalti", name: "Khalti", icon: Smartphone, description: "Mobile payment" },
-  { id: "paypal", name: "PayPal", icon: CreditCard, description: "International payment" },
-  { id: "stripe", name: "Credit/Debit Card", icon: CreditCard, description: "Visa, Mastercard, etc." },
-  { id: "imepay", name: "IME Pay", icon: Smartphone, description: "Mobile banking" },
-  { id: "connectips", name: "ConnectIPS", icon: Building2, description: "Internet banking" },
-  { id: "bank", name: "Bank Transfer", icon: Building2, description: "Direct bank transfer" },
-  { id: "cash", name: "Cash Payment", icon: Banknote, description: "Pay at office" },
+  { id: "esewa", name: "eSewa", icon: Smartphone, description: "Pay with eSewa digital wallet" },
+  { id: "khalti", name: "Khalti", icon: Smartphone, description: "Pay with Khalti digital wallet" },
+  { id: "paypal", name: "PayPal", icon: CreditCard, description: "Pay with PayPal (International)" },
+  { id: "stripe", name: "Credit/Debit Card", icon: CreditCard, description: "Pay with Stripe (International)" },
+  { id: "imepay", name: "IME Pay", icon: Smartphone, description: "Pay with IME Pay" },
+  { id: "connectips", name: "ConnectIPS", icon: Building2, description: "Pay with ConnectIPS" },
+  { id: "bank_transfer", name: "Bank Transfer", icon: Building2, description: "Manual bank transfer" },
+  { id: "cash", name: "Cash Payment", icon: DollarSign, description: "Pay cash at our office" },
 ]
 
-export default function MembershipApplyPage() {
-  const { translate } = useTranslation()
-  const [loading, setLoading] = useState(false)
-  const [selectedMembership, setSelectedMembership] = useState("")
-  const [paymentMethod, setPaymentMethod] = useState("")
-  const [agreedToTerms, setAgreedToTerms] = useState(false)
-  const [memberInfo, setMemberInfo] = useState({
-    firstName: "",
-    lastName: "",
+export default function MembershipApplicationPage() {
+  const { translate, language } = useTranslation()
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
+
+  const [formData, setFormData] = useState({
+    membershipType: "",
+    paymentMethod: "",
+
+    // Personal Information
+    fullName: "",
     email: "",
     phone: "",
-    address: "",
+    dateOfBirth: "",
+    gender: "",
+    nationality: "",
+
+    // Address
+    currentAddress: "",
+    permanentAddress: "",
     city: "",
+    state: "",
     country: "",
+    postalCode: "",
+
+    // Professional Information
     occupation: "",
     organization: "",
+    designation: "",
+
+    // Emergency Contact
+    emergencyContactName: "",
+    emergencyContactPhone: "",
+    emergencyContactRelation: "",
+
+    // Documents
+    profilePhoto: "",
+    identityDocument: "",
+
+    // Additional Information
     interests: "",
-    referredBy: "",
+    experience: "",
     motivation: "",
+    referredBy: "",
+
+    // Agreements
+    agreeTerms: false,
+    agreePrivacy: false,
+    receiveUpdates: true,
   })
 
-  const selectedMembershipType = membershipTypes.find((m) => m.id === selectedMembership)
+  const selectedMembership = membershipTypes.find((type) => type.id === formData.membershipType)
+
+  const handleFileUpload = (field: string, fileData: any) => {
+    setFormData({ ...formData, [field]: fileData.url })
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!selectedMembership) {
-      toast.error("Please select a membership type")
-      return
-    }
-
-    if (!paymentMethod) {
-      toast.error("Please select a payment method")
-      return
-    }
-
-    if (!memberInfo.firstName || !memberInfo.lastName || !memberInfo.email || !memberInfo.phone) {
-      toast.error("Please fill in all required fields")
-      return
-    }
-
-    if (!agreedToTerms) {
-      toast.error("Please agree to the terms and conditions")
-      return
-    }
-
-    setLoading(true)
+    setError("")
+    setSuccess("")
+    setIsLoading(true)
 
     try {
-      const membershipType = membershipTypes.find((m) => m.id === selectedMembership)
-      if (!membershipType) {
-        toast.error("Invalid membership type")
-        return
+      if (!formData.membershipType) {
+        throw new Error("Please select a membership type")
       }
 
-      const response = await fetch("/api/payments/initiate", {
+      if (!formData.paymentMethod) {
+        throw new Error("Please select a payment method")
+      }
+
+      if (!formData.fullName || !formData.email || !formData.phone) {
+        throw new Error("Please fill in all required fields")
+      }
+
+      if (!formData.agreeTerms || !formData.agreePrivacy) {
+        throw new Error("Please agree to the terms and privacy policy")
+      }
+
+      const membershipFee = selectedMembership?.fee || 0
+
+      // Create membership application
+      const applicationResponse = await fetch("/api/members", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          method: paymentMethod,
-          amount: membershipType.fee,
-          currency: membershipType.currency,
-          description: `${membershipType.name} - Sanatan Dharma Board Nepal`,
-          type: "membership",
+          ...formData,
+          membershipFee,
+          status: "pending_payment",
+          applicationDate: new Date().toISOString(),
+        }),
+      })
+
+      if (!applicationResponse.ok) {
+        const errorData = await applicationResponse.json()
+        throw new Error(errorData.error || "Application submission failed")
+      }
+
+      const applicationResult = await applicationResponse.json()
+
+      // Initiate payment
+      const paymentResponse = await fetch("/api/payments/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gateway: formData.paymentMethod,
+          amount: membershipFee,
+          currency: "NPR",
+          description: `Membership Fee - ${selectedMembership?.name}`,
           customerInfo: {
-            name: `${memberInfo.firstName} ${memberInfo.lastName}`,
-            email: memberInfo.email,
-            phone: memberInfo.phone,
+            name: formData.fullName,
+            email: formData.email,
+            phone: formData.phone,
+          },
+          metadata: {
+            type: "membership",
+            membershipType: formData.membershipType,
+            applicationId: applicationResult.data.id,
           },
         }),
       })
 
-      const result = await response.json()
-
-      if (result.success) {
-        if (result.formHtml) {
-          // For form-based payments (eSewa, IME Pay, ConnectIPS)
-          const newWindow = window.open("", "_blank")
-          if (newWindow) {
-            newWindow.document.write(result.formHtml)
-            newWindow.document.close()
-          }
-        } else if (result.redirectUrl) {
-          // For redirect-based payments (Khalti, PayPal, Stripe)
-          window.location.href = result.redirectUrl
-        }
-      } else {
-        toast.error(result.error || "Payment initiation failed")
+      if (!paymentResponse.ok) {
+        const errorData = await paymentResponse.json()
+        throw new Error(errorData.error || "Payment initiation failed")
       }
-    } catch (error) {
-      console.error("Membership application error:", error)
-      toast.error("An error occurred while processing your application")
+
+      const paymentResult = await paymentResponse.json()
+
+      if (paymentResult.formHtml) {
+        // For form-based payments (eSewa, IME Pay, ConnectIPS)
+        const newWindow = window.open("", "_blank")
+        if (newWindow) {
+          newWindow.document.write(paymentResult.formHtml)
+          newWindow.document.close()
+        }
+      } else if (paymentResult.paymentUrl) {
+        // For redirect-based payments (Khalti, PayPal, Stripe)
+        window.location.href = paymentResult.paymentUrl
+      } else {
+        // For manual payments (Bank Transfer, Cash)
+        setSuccess(
+          "Your membership application has been submitted successfully! Payment instructions have been sent to your email.",
+        )
+      }
+    } catch (err: any) {
+      setError(err.message || "An error occurred while processing your application")
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 py-12">
-      <div className="container mx-auto px-4">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-6">
-              <Users className="w-8 h-8 text-blue-600" />
-            </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">{translate("Join Our Community")}</h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              {translate("Become a member of Sanatan Dharma Board Nepal and be part of our mission")}
-            </p>
-          </div>
+    <div className="container mx-auto px-4 py-8">
+      {/* Hero Section */}
+      <section className="text-center mb-12">
+        <div className="flex justify-center mb-4">
+          <Users className="h-16 w-16 text-orange-600" />
+        </div>
+        <h1 className="text-4xl font-bold mb-4 text-orange-600">
+          Membership Application
+        </h1>
+        <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+          Join Sanatan Dharma Bikash Nepal and become part of our growing community.
+        </p>
+      </section>
 
-          <form onSubmit={handleSubmit} className="space-y-8">
-            {/* Membership Type Selection */}
-            <Card>
-              <CardHeader>
-                <CardTitle>{translate("Choose Membership Type")}</CardTitle>
-                <CardDescription>{translate("Select the membership plan that best suits your needs")}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup value={selectedMembership} onValueChange={setSelectedMembership}>
-                  <div className="grid gap-4">
-                    {membershipTypes.map((membership) => (
-                      <div key={membership.id} className="border rounded-lg p-4 hover:bg-gray-50">
+      {/* Featured Video */}
+      <section className="mb-12">
+        <PageVideo videoId="membership-page-video" />
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Application Form */}
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-orange-600" />
+                Membership Application Form
+              </CardTitle>
+              <CardDescription>
+                Please fill in all required information accurately
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-8">
+                {/* Membership Type Selection */}
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">
+                    Membership Type *
+                  </Label>
+                  <RadioGroup
+                    value={formData.membershipType}
+                    onValueChange={(value) => setFormData({ ...formData, membershipType: value })}
+                    className="space-y-4"
+                  >
+                    {membershipTypes.map((type) => (
+                      <div key={type.id} className="border rounded-lg p-4 hover:bg-gray-50">
                         <div className="flex items-start space-x-3">
-                          <RadioGroupItem value={membership.id} id={membership.id} className="mt-1" />
+                          <RadioGroupItem value={type.id} id={type.id} className="mt-1" />
                           <div className="flex-1">
-                            <Label htmlFor={membership.id} className="cursor-pointer">
-                              <div className="flex justify-between items-start mb-2">
-                                <h3 className="font-semibold text-lg">{membership.name}</h3>
-                                <span className="text-2xl font-bold text-blue-600">
-                                  Rs. {membership.fee.toLocaleString()}
-                                </span>
-                              </div>
-                              <ul className="text-sm text-gray-600 space-y-1">
-                                {membership.benefits.map((benefit, index) => (
-                                  <li key={index} className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                                    {benefit}
-                                  </li>
-                                ))}
-                              </ul>
+                            <Label htmlFor={type.id} className="font-medium cursor-pointer">
+                              {type.name}
                             </Label>
+                            <div className="flex items-center gap-4 mt-1">
+                              <span className="text-lg font-bold text-orange-600">NPR {type.fee.toLocaleString()}</span>
+                              <span className="text-sm text-gray-500">({type.duration})</span>
+                            </div>
+                            <ul className="mt-2 space-y-1">
+                              {type.benefits.map((benefit, index) => (
+                                <li key={index} className="text-sm text-gray-600 flex items-center">
+                                  <span className="w-1 h-1 bg-orange-600 rounded-full mr-2"></span>
+                                  {benefit}
+                                </li>
+                              ))}
+                            </ul>
                           </div>
                         </div>
                       </div>
                     ))}
-                  </div>
-                </RadioGroup>
-              </CardContent>
-            </Card>
-
-            {/* Personal Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle>{translate("Personal Information")}</CardTitle>
-                <CardDescription>{translate("Please provide your personal details")}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">{translate("First Name")} *</Label>
-                    <Input
-                      id="firstName"
-                      value={memberInfo.firstName}
-                      onChange={(e) => setMemberInfo((prev) => ({ ...prev, firstName: e.target.value }))}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">{translate("Last Name")} *</Label>
-                    <Input
-                      id="lastName"
-                      value={memberInfo.lastName}
-                      onChange={(e) => setMemberInfo((prev) => ({ ...prev, lastName: e.target.value }))}
-                      required
-                    />
-                  </div>
+                  </RadioGroup>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">{translate("Email Address")} *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={memberInfo.email}
-                      onChange={(e) => setMemberInfo((prev) => ({ ...prev, email: e.target.value }))}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">{translate("Phone Number")} *</Label>
-                    <Input
-                      id="phone"
-                      value={memberInfo.phone}
-                      onChange={(e) => setMemberInfo((prev) => ({ ...prev, phone: e.target.value }))}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="address">{translate("Address")}</Label>
-                  <Input
-                    id="address"
-                    value={memberInfo.address}
-                    onChange={(e) => setMemberInfo((prev) => ({ ...prev, address: e.target.value }))}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">{translate("City")}</Label>
-                    <Input
-                      id="city"
-                      value={memberInfo.city}
-                      onChange={(e) => setMemberInfo((prev) => ({ ...prev, city: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="country">{translate("Country")}</Label>
-                    <Input
-                      id="country"
-                      value={memberInfo.country}
-                      onChange={(e) => setMemberInfo((prev) => ({ ...prev, country: e.target.value }))}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="occupation">{translate("Occupation")}</Label>
-                    <Input
-                      id="occupation"
-                      value={memberInfo.occupation}
-                      onChange={(e) => setMemberInfo((prev) => ({ ...prev, occupation: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="organization">{translate("Organization")}</Label>
-                    <Input
-                      id="organization"
-                      value={memberInfo.organization}
-                      onChange={(e) => setMemberInfo((prev) => ({ ...prev, organization: e.target.value }))}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="interests">{translate("Areas of Interest")}</Label>
-                  <Textarea
-                    id="interests"
-                    placeholder={translate("e.g., Cultural events, Educational programs, Community service...")}
-                    value={memberInfo.interests}
-                    onChange={(e) => setMemberInfo((prev) => ({ ...prev, interests: e.target.value }))}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="referredBy">{translate("Referred By (Optional)")}</Label>
-                  <Input
-                    id="referredBy"
-                    placeholder={translate("Name of the person who referred you")}
-                    value={memberInfo.referredBy}
-                    onChange={(e) => setMemberInfo((prev) => ({ ...prev, referredBy: e.target.value }))}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="motivation">{translate("Why do you want to join?")}</Label>
-                  <Textarea
-                    id="motivation"
-                    placeholder={translate("Share your motivation for joining our community...")}
-                    value={memberInfo.motivation}
-                    onChange={(e) => setMemberInfo((prev) => ({ ...prev, motivation: e.target.value }))}
-                    rows={4}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Payment Method */}
-            <Card>
-              <CardHeader>
-                <CardTitle>{translate("Payment Method")}</CardTitle>
-                <CardDescription>{translate("Choose how you would like to pay your membership fee")}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <div className="grid gap-3">
-                    {paymentMethods.map((method) => {
-                      const Icon = method.icon
-                      return (
-                        <div
-                          key={method.id}
-                          className="flex items-center space-x-2 border rounded-lg p-3 hover:bg-gray-50"
-                        >
-                          <RadioGroupItem value={method.id} id={`payment-${method.id}`} />
-                          <Label
-                            htmlFor={`payment-${method.id}`}
-                            className="flex items-center gap-3 cursor-pointer flex-1"
-                          >
-                            <Icon className="w-5 h-5 text-gray-600" />
-                            <div>
-                              <div className="font-medium">{method.name}</div>
-                              <div className="text-sm text-gray-500">{method.description}</div>
-                            </div>
-                          </Label>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </RadioGroup>
-              </CardContent>
-            </Card>
-
-            {/* Terms and Conditions */}
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-start space-x-2">
-                  <Checkbox
-                    id="terms"
-                    checked={agreedToTerms}
-                    onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
-                  />
-                  <Label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer">
-                    {translate(
-                      "I agree to the terms and conditions of membership and understand that my application will be reviewed by the board. I commit to upholding the values and principles of Sanatan Dharma Board Nepal.",
-                    )}
+                {/* Personal Information */}
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">
+                    Personal Information
                   </Label>
-                </div>
-              </CardContent>
-            </Card>
 
-            {/* Submit Button */}
-            <div className="flex justify-center">
-              <Button
-                type="submit"
-                size="lg"
-                className="px-12 h-12 text-lg"
-                disabled={loading || !selectedMembership || !paymentMethod || !agreedToTerms}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    {translate("Processing...")}
-                  </>
-                ) : (
-                  <>
-                    <Users className="w-5 h-5 mr-2" />
-                    {translate("Apply for Membership")}
-                    {selectedMembershipType && (
-                      <span className="ml-2">- Rs. {selectedMembershipType.fee.toLocaleString()}</span>
-                    )}
-                  </>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="fullName">Full Name *</Label>
+                      <Input
+                        id="fullName"
+                        required
+                        value={formData.fullName}
+                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                        placeholder="Enter your full name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="email">Email Address *</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        required
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        placeholder="Enter your email"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="phone">Phone Number *</Label>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        required
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder="Phone number"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="dateOfBirth">Date of Birth</Label>
+                      <Input
+                        id="dateOfBirth"
+                        type="date"
+                        value={formData.dateOfBirth}
+                        onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="gender">Gender</Label>
+                      <Select
+                        value={formData.gender}
+                        onValueChange={(value) => setFormData({ ...formData, gender: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select gender" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="male">Male</SelectItem>
+                          <SelectItem value="female">Female</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="nationality">Nationality</Label>
+                    <Input
+                      id="nationality"
+                      value={formData.nationality}
+                      onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                      placeholder="Nationality"
+                    />
+                  </div>
+                </div>
+
+                {/* Address Information */}
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">
+                    Address Information
+                  </Label>
+
+                  <div>
+                    <Label htmlFor="currentAddress">Current Address</Label>
+                    <Textarea
+                      id="currentAddress"
+                      value={formData.currentAddress}
+                      onChange={(e) => setFormData({ ...formData, currentAddress: e.target.value })}
+                      placeholder="Current address"
+                      rows={2}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="permanentAddress">Permanent Address</Label>
+                    <Textarea
+                      id="permanentAddress"
+                      value={formData.permanentAddress}
+                      onChange={(e) => setFormData({ ...formData, permanentAddress: e.target.value })}
+                      placeholder="Permanent address"
+                      rows={2}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <Label htmlFor="city">City</Label>
+                      <Input
+                        id="city"
+                        value={formData.city}
+                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                        placeholder="City"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="state">State/Province</Label>
+                      <Input
+                        id="state"
+                        value={formData.state}
+                        onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                        placeholder="State"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="country">Country</Label>
+                      <Input
+                        id="country"
+                        value={formData.country}
+                        onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                        placeholder="Country"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="postalCode">Postal Code</Label>
+                      <Input
+                        id="postalCode"
+                        value={formData.postalCode}
+                        onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
+                        placeholder="Postal code"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Professional Information */}
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">
+                    Professional Information
+                  </Label>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="occupation">Occupation</Label>
+                      <Input
+                        id="occupation"
+                        value={formData.occupation}
+                        onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
+                        placeholder="Occupation"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="organization">Organization</Label>
+                      <Input
+                        id="organization"
+                        value={formData.organization}
+                        onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
+                        placeholder="Organization"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="designation">Designation</Label>
+                      <Input
+                        id="designation"
+                        value={formData.designation}
+                        onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                        placeholder="Designation"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Emergency Contact */}
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">
+                    Emergency Contact
+                  </Label>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="emergencyContactName">Name</Label>
+                      <Input
+                        id="emergencyContactName"
+                        value={formData.emergencyContactName}
+                        onChange={(e) => setFormData({ ...formData, emergencyContactName: e.target.value })}
+                        placeholder="Emergency contact name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="emergencyContactPhone">Phone Number</Label>
+                      <Input
+                        id="emergencyContactPhone"
+                        type="tel"
+                        value={formData.emergencyContactPhone}
+                        onChange={(e) => setFormData({ ...formData, emergencyContactPhone: e.target.value })}
+                        placeholder="Phone number"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="emergencyContactRelation">Relationship</Label>
+                      <Input
+                        id="emergencyContactRelation"
+                        value={formData.emergencyContactRelation}
+                        onChange={(e) => setFormData({ ...formData, emergencyContactRelation: e.target.value })}
+                        placeholder="Relationship"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Document Upload */}
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">Documents</Label>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Label>Profile Photo</Label>
+                      <FileUpload
+                        onUpload={(fileData) => handleFileUpload("profilePhoto", fileData)}
+                        accept="image/*"
+                        folder="member-photos"
+                        maxSize={5}
+                        label="Upload Photo"
+                        currentFile={formData.profilePhoto}
+                      />
+                    </div>
+                    <div>
+                      <Label>Identity Document</Label>
+                      <FileUpload
+                        onUpload={(fileData) => handleFileUpload("identityDocument", fileData)}
+                        accept="image/*,.pdf"
+                        folder="member-documents"
+                        maxSize={10}
+                        label="Upload Document"
+                        currentFile={formData.identityDocument}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Information */}
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">
+                    Additional Information
+                  </Label>
+
+                  <div>
+                    <Label htmlFor="interests">Interests</Label>
+                    <Textarea
+                      id="interests"
+                      value={formData.interests}
+                      onChange={(e) => setFormData({ ...formData, interests: e.target.value })}
+                      placeholder="Describe your interests"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="experience">Relevant Experience</Label>
+                    <Textarea
+                      id="experience"
+                      value={formData.experience}
+                      onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
+                      placeholder="Any relevant experience"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="motivation">
+                      Why do you want to join?
+                    </Label>
+                    <Textarea
+                      id="motivation"
+                      value={formData.motivation}
+                      onChange={(e) => setFormData({ ...formData, motivation: e.target.value })}
+                      placeholder="Your motivation to join"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="referredBy">Referred By</Label>
+                    <Input
+                      id="referredBy"
+                      value={formData.referredBy}
+                      onChange={(e) => setFormData({ ...formData, referredBy: e.target.value })}
+                      placeholder="Name of the person who referred you"
+                    />
+                  </div>
+                </div>
+
+                {/* Payment Method */}
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">
+                    Payment Method *
+                  </Label>
+                  <RadioGroup
+                    value={formData.paymentMethod}
+                    onValueChange={(value) => setFormData({ ...formData, paymentMethod: value })}
+                    className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                  >
+                    {paymentMethods.map((method) => (
+                      <div
+                        key={method.id}
+                        className="flex items-center space-x-2 border rounded-lg p-3 hover:bg-gray-50"
+                      >
+                        <RadioGroupItem value={method.id} id={method.id} />
+                        <div className="flex items-center space-x-3 flex-1">
+                          <method.icon className="h-5 w-5 text-orange-600" />
+                          <div>
+                            <Label htmlFor={method.id} className="font-medium cursor-pointer">
+                              {method.name}
+                            </Label>
+                            <p className="text-sm text-gray-500">{method.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
+
+                {/* Agreements */}
+                <div className="space-y-3">
+                  <div className="flex items-start space-x-2">
+                    <Checkbox
+                      id="agreeTerms"
+                      checked={formData.agreeTerms}
+                      onCheckedChange={(checked) => setFormData({ ...formData, agreeTerms: checked as boolean })}
+                      className="mt-1"
+                    />
+                    <Label htmlFor="agreeTerms" className="text-sm">
+                      I agree to the terms and conditions *
+                    </Label>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <Checkbox
+                      id="agreePrivacy"
+                      checked={formData.agreePrivacy}
+                      onCheckedChange={(checked) => setFormData({ ...formData, agreePrivacy: checked as boolean })}
+                      className="mt-1"
+                    />
+                    <Label htmlFor="agreePrivacy" className="text-sm">
+                      I agree to the privacy policy *
+                    </Label>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <Checkbox
+                      id="receiveUpdates"
+                      checked={formData.receiveUpdates}
+                      onCheckedChange={(checked) => setFormData({ ...formData, receiveUpdates: checked as boolean })}
+                      className="mt-1"
+                    />
+                    <Label htmlFor="receiveUpdates" className="text-sm">
+                      I want to receive updates and newsletters
+                    </Label>
+                  </div>
+                </div>
+
+                {/* Error/Success Messages */}
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
                 )}
-              </Button>
-            </div>
-          </form>
+
+                {success && (
+                  <Alert>
+                    <AlertDescription>{success}</AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Submit Button */}
+                <Button type="submit" className="w-full bg-orange-600 hover:bg-orange-700" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Users className="h-4 w-4 mr-2" />
+                      Submit Application
+                      {selectedMembership && (
+                        <span className="ml-2">(NPR {selectedMembership.fee.toLocaleString()})</span>
+                      )}
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* Membership Benefits */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Membership Benefits</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+                <span className="text-sm">Access to all events</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+                <span className="text-sm">Library access</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+                <span className="text-sm">Community network</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+                <span className="text-sm">Monthly newsletter</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+                <span className="text-sm">Special discounts</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Contact Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Contact Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="font-medium">Office</p>
+                <p className="text-sm text-gray-600">Kathmandu, Nepal</p>
+              </div>
+              <div>
+                <p className="font-medium">Phone</p>
+                <p className="text-sm text-gray-600">+977-1-4444444</p>
+              </div>
+              <div>
+                <p className="font-medium">Email</p>
+                <p className="text-sm text-gray-600">membership@sanatandharma.org</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Processing Time */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Processing Time</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600">
+                Your application will be processed within 3-5 business days. Membership will be activated after payment confirmation.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
+
+      {/* FAQ Section */}
+      <section className="mt-12">
+        <h2 className="text-3xl font-bold mb-6 text-orange-600">
+          Frequently Asked Questions
+        </h2>
+        <PageFAQ pageId="membership" />
+      </section>
     </div>
   )
 }

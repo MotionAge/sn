@@ -1,10 +1,14 @@
-interface ESewaConfig {
+import crypto from "crypto"
+
+export interface ESewaConfig {
   merchantId: string
   secretKey: string
+  successUrl: string
+  failureUrl: string
   environment: "sandbox" | "production"
 }
 
-interface ESewaPaymentData {
+export interface ESewaPaymentData {
   amount: number
   productCode: string
   productServiceCharge: number
@@ -16,26 +20,20 @@ interface ESewaPaymentData {
   failureUrl: string
 }
 
-export class ESewaPayment {
+export class ESewaGateway {
   private config: ESewaConfig
   private baseUrl: string
 
-  constructor() {
-    this.config = {
-      merchantId: process.env.ESEWA_MERCHANT_ID || "",
-      secretKey: process.env.ESEWA_SECRET_KEY || "",
-      environment: (process.env.ESEWA_ENVIRONMENT as "sandbox" | "production") || "sandbox",
-    }
-
+  constructor(config: ESewaConfig) {
+    this.config = config
     this.baseUrl =
-      this.config.environment === "production"
+      config.environment === "production"
         ? "https://epay.esewa.com.np/api/epay/main/v2/form"
         : "https://rc-epay.esewa.com.np/api/epay/main/v2/form"
   }
 
   generateSignature(data: ESewaPaymentData): string {
     const message = `total_amount=${data.totalAmount},transaction_uuid=${data.transactionUuid},product_code=${data.productCode}`
-    const crypto = require("crypto")
     return crypto.createHmac("sha256", this.config.secretKey).update(message).digest("base64")
   }
 
@@ -60,15 +58,15 @@ export class ESewaPayment {
     `
   }
 
-  async verifyPayment(transactionUuid: string, totalAmount: number, productCode: string): Promise<boolean> {
-    try {
-      const verifyUrl =
-        this.config.environment === "production"
-          ? "https://epay.esewa.com.np/api/epay/transaction/status/"
-          : "https://rc-epay.esewa.com.np/api/epay/transaction/status/"
+  async verifyPayment(transactionUuid: string, totalAmount: number): Promise<any> {
+    const verifyUrl =
+      this.config.environment === "production"
+        ? "https://epay.esewa.com.np/api/epay/transaction/status/"
+        : "https://rc-epay.esewa.com.np/api/epay/transaction/status/"
 
+    try {
       const response = await fetch(
-        `${verifyUrl}?product_code=${productCode}&total_amount=${totalAmount}&transaction_uuid=${transactionUuid}`,
+        `${verifyUrl}?product_code=${this.config.merchantId}&total_amount=${totalAmount}&transaction_uuid=${transactionUuid}`,
         {
           method: "GET",
           headers: {
@@ -78,11 +76,14 @@ export class ESewaPayment {
         },
       )
 
-      const result = await response.json()
-      return result.status === "COMPLETE"
+      if (!response.ok) {
+        throw new Error("Payment verification failed")
+      }
+
+      return await response.json()
     } catch (error) {
       console.error("eSewa verification error:", error)
-      return false
+      throw error
     }
   }
 }

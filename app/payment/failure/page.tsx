@@ -1,78 +1,140 @@
 "use client"
 
 import { useSearchParams } from "next/navigation"
-import { useTranslation } from "@/hooks/use-translation"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { X, Home, RefreshCw } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { XCircle, Home, RefreshCw, HelpCircle } from "lucide-react"
 import Link from "next/link"
 
 export default function PaymentFailurePage() {
-  const { t } = useTranslation()
   const searchParams = useSearchParams()
-  const method = searchParams.get("method")
-  const orderId = searchParams.get("orderId")
+  const gateway = searchParams.get("gateway")
+  const error = searchParams.get("error") || "Payment was not completed"
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 py-12">
-      <div className="container mx-auto px-4">
-        <div className="max-w-2xl mx-auto">
-          <Card>
-            <CardContent className="text-center py-12">
-              <div className="inline-flex items-center justify-center w-20 h-20 bg-red-100 rounded-full mb-6">
-                <X className="w-10 h-10 text-red-600" />
+    <div className="container mx-auto px-4 py-16">
+      <div className="max-w-2xl mx-auto">
+        {/* Failure Header */}
+        <div className="text-center mb-8">
+          <XCircle className="h-20 w-20 text-red-600 mx-auto mb-4" />
+          <h1 className="text-4xl font-bold text-red-600 mb-2">Payment Failed</h1>
+          <p className="text-xl text-gray-600">We couldn't process your payment. Please try again.</p>
+        </div>
+
+        {/* Error Details */}
+        <Alert variant="destructive" className="mb-8">
+          <AlertDescription>
+            <strong>Error:</strong> {error}
+          </AlertDescription>
+        </Alert>
+
+        {/* Failure Reasons */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Common Reasons for Payment Failure</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-start space-x-3">
+              <div className="w-2 h-2 bg-red-600 rounded-full mt-2"></div>
+              <p className="text-sm">Insufficient funds in your account</p>
+            </div>
+            <div className="flex items-start space-x-3">
+              <div className="w-2 h-2 bg-red-600 rounded-full mt-2"></div>
+              <p className="text-sm">Incorrect payment details entered</p>
+            </div>
+            <div className="flex items-start space-x-3">
+              <div className="w-2 h-2 bg-red-600 rounded-full mt-2"></div>
+              <p className="text-sm">Network connectivity issues</p>
+            </div>
+            <div className="flex items-start space-x-3">
+              <div className="w-2 h-2 bg-red-600 rounded-full mt-2"></div>
+              <p className="text-sm">Payment gateway temporary unavailability</p>
+            </div>
+            <div className="flex items-start space-x-3">
+              <div className="w-2 h-2 bg-red-600 rounded-full mt-2"></div>
+              <p className="text-sm">Transaction cancelled by user</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* What to do next */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>What You Can Do</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-start space-x-3">
+              <RefreshCw className="h-5 w-5 text-blue-600 mt-1" />
+              <div>
+                <p className="font-medium">Try Again</p>
+                <p className="text-sm text-gray-600">Go back and retry the payment with correct details</p>
               </div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-4">{t("Payment Failed")}</h1>
-              <p className="text-xl text-gray-600 mb-6">{t("Unfortunately, your payment could not be processed")}</p>
+            </div>
 
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-8">
-                <h3 className="font-semibold text-red-800 mb-2">{t("Possible Reasons:")}</h3>
-                <ul className="text-sm text-red-700 space-y-1 text-left">
-                  <li>• {t("Insufficient funds in your account")}</li>
-                  <li>• {t("Payment was cancelled by user")}</li>
-                  <li>• {t("Network connectivity issues")}</li>
-                  <li>• {t("Payment gateway timeout")}</li>
-                  <li>• {t("Invalid payment details")}</li>
-                </ul>
-              </div>
-
-              {orderId && (
-                <div className="mb-8 p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600">
-                    {t("Order ID")}: <span className="font-mono">{orderId}</span>
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {t("Payment Method")}: <span className="capitalize">{method}</span>
-                  </p>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <Button asChild size="lg" className="w-full sm:w-auto">
-                  <Link href="/donate">
-                    <RefreshCw className="w-5 h-5 mr-2" />
-                    {t("Try Again")}
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" size="lg" className="w-full sm:w-auto bg-transparent">
-                  <Link href="/">
-                    <Home className="w-5 h-5 mr-2" />
-                    {t("Back to Home")}
-                  </Link>
-                </Button>
-              </div>
-
-              <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-                <h4 className="font-semibold text-blue-800 mb-2">{t("Need Help?")}</h4>
-                <p className="text-sm text-blue-700">
-                  {t("If you continue to experience issues, please contact our support team at")}{" "}
-                  <a href="mailto:support@sanatandharmaboard.org" className="underline">
-                    support@sanatandharmaboard.org
-                  </a>
+            <div className="flex items-start space-x-3">
+              <HelpCircle className="h-5 w-5 text-orange-600 mt-1" />
+              <div>
+                <p className="font-medium">Contact Support</p>
+                <p className="text-sm text-gray-600">
+                  If the problem persists, contact our support team for assistance
                 </p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+
+            <div className="flex items-start space-x-3">
+              <div className="w-5 h-5 bg-green-600 rounded-full flex items-center justify-center mt-1">
+                <span className="text-white text-xs">₹</span>
+              </div>
+              <div>
+                <p className="font-medium">Try Different Payment Method</p>
+                <p className="text-sm text-gray-600">
+                  Use an alternative payment method like bank transfer or cash payment
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Button asChild className="bg-orange-600 hover:bg-orange-700">
+            <Link href="/donate">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
+            </Link>
+          </Button>
+
+          <Button asChild variant="outline">
+            <Link href="/contact">
+              <HelpCircle className="h-4 w-4 mr-2" />
+              Contact Support
+            </Link>
+          </Button>
+
+          <Button asChild variant="outline">
+            <Link href="/">
+              <Home className="h-4 w-4 mr-2" />
+              Return Home
+            </Link>
+          </Button>
+        </div>
+
+        {/* Support Information */}
+        <div className="text-center mt-12 p-6 bg-gray-50 rounded-lg">
+          <h3 className="text-xl font-bold text-gray-800 mb-2">Need Help?</h3>
+          <p className="text-gray-600 mb-4">Our support team is here to help you complete your transaction.</p>
+          <div className="space-y-2">
+            <p className="text-sm">
+              <strong>Email:</strong> support@sanatandharma.org
+            </p>
+            <p className="text-sm">
+              <strong>Phone:</strong> +977-1-4444444
+            </p>
+            <p className="text-sm">
+              <strong>Office Hours:</strong> Sunday-Friday, 10:00 AM - 5:00 PM
+            </p>
+          </div>
         </div>
       </div>
     </div>

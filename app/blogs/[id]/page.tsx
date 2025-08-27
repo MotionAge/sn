@@ -60,26 +60,6 @@ export default function BlogDetailPage() {
     }
   }, [params.id])
 
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title:  blog?.title_en,
-          text:  blog?.excerpt_en,
-          // title: language === "ne" ? blog?.title_ne : blog?.title_en,
-          // text: language === "ne" ? blog?.excerpt_ne : blog?.excerpt_en,
-          url: window.location.href,
-        })
-      } catch (error) {
-        console.log("Error sharing:", error)
-      }
-    } else {
-      // Fallback: copy to clipboard
-      navigator.clipboard.writeText(window.location.href)
-      alert("Link copied to clipboard!")
-    }
-  }
-
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -108,10 +88,27 @@ export default function BlogDetailPage() {
     )
   }
 
-  // const title = language === "ne" ? blog.title_ne : blog.title_en
-  // const content = language === "ne" ? blog.content_ne : blog.content_en
-  const title =  blog.title_en
-  const content =  blog.content_en
+  // Dynamically get fields based on current language
+  const title = blog[`title_${language as "en" | "ne"}`]
+  const content = blog[`content_${language as "en" | "ne"}`]
+  const excerpt = blog[`excerpt_${language as "en" | "ne"}`]
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title,
+          text: excerpt,
+          url: window.location.href,
+        })
+      } catch (error) {
+        console.log("Error sharing:", error)
+      }
+    } else {
+      navigator.clipboard.writeText(window.location.href)
+      alert("Link copied to clipboard!")
+    }
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">

@@ -201,7 +201,11 @@ export default function ProjectsPage() {
                                 of {formatCurrency(project.goal_amount, project.currency)}
                               </span>
                             </div>
-                            <Progress value={progress} className="h-2 bg-gray-200" indicatorClassName="bg-orange-600" />
+                            <Progress
+                              value={progress}
+                              className="h-2 bg-gray-200 [&>div]:bg-orange-600"
+                            />
+
                             <div className="text-right text-sm text-gray-500">{progress}% complete</div>
                           </div>
                         )}

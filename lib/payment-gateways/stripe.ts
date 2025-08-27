@@ -1,98 +1,116 @@
-interface StripeConfig {
-  publishableKey: string
+import Stripe from "stripe"
+
+export interface StripeConfig {
   secretKey: string
+  publishableKey: string
   webhookSecret: string
+  environment: "test" | "live"
 }
 
-interface StripeSessionData {
-  amount: number
-  currency: string
-  description: string
+export interface StripeSessionData {
+  line_items: Array<{
+    price_data: {
+      currency: string
+      product_data: {
+        name: string
+        description?: string
+      }
+      unit_amount: number
+    }
+    quantity: number
+  }>
+  mode: "payment" | "subscription" | "setup"
   success_url: string
   cancel_url: string
   customer_email?: string
+  metadata?: Record<string, string>
 }
 
-export class StripePayment {
+export class StripeGateway {
+  private stripe: Stripe
   private config: StripeConfig
 
-  constructor() {
-    this.config = {
-      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || "",
-      secretKey: process.env.STRIPE_SECRET_KEY || "",
-      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
-    }
+  constructor(config: StripeConfig) {
+    this.config = config
+    this.stripe = new Stripe(config.secretKey, {
+      apiVersion: "2023-10-16",
+    })
   }
 
-  async createCheckoutSession(sessionData: StripeSessionData): Promise<{ id: string; url: string } | null> {
+  async createCheckoutSession(sessionData: StripeSessionData): Promise<Stripe.Checkout.Session> {
     try {
-      const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.config.secretKey}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          mode: "payment",
-          success_url: sessionData.success_url,
-          cancel_url: sessionData.cancel_url,
-          "line_items[0][price_data][currency]": sessionData.currency,
-          "line_items[0][price_data][product_data][name]": sessionData.description,
-          "line_items[0][price_data][unit_amount]": (sessionData.amount * 100).toString(),
-          "line_items[0][quantity]": "1",
-          ...(sessionData.customer_email && { customer_email: sessionData.customer_email }),
-        }),
-      })
-
-      const result = await response.json()
-
-      if (result.id && result.url) {
-        return {
-          id: result.id,
-          url: result.url,
-        }
-      }
-
-      return null
+      const session = await this.stripe.checkout.sessions.create(sessionData)
+      return session
     } catch (error) {
       console.error("Stripe session creation error:", error)
-      return null
+      throw error
     }
   }
 
-  async retrieveSession(sessionId: string): Promise<{ status: string; payment_intent?: string }> {
+  async retrieveSession(sessionId: string): Promise<Stripe.Checkout.Session> {
     try {
-      const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${this.config.secretKey}`,
-        },
-      })
-
-      const result = await response.json()
-
-      return {
-        status: result.payment_status,
-        payment_intent: result.payment_intent,
-      }
+      const session = await this.stripe.checkout.sessions.retrieve(sessionId)
+      return session
     } catch (error) {
       console.error("Stripe session retrieval error:", error)
-      return { status: "failed" }
+      throw error
     }
   }
 
-  verifyWebhookSignature(payload: string, signature: string): boolean {
+  async createPaymentIntent(
+    amount: number,
+    currency = "usd",
+    metadata?: Record<string, string>,
+  ): Promise<Stripe.PaymentIntent> {
     try {
-      const crypto = require("crypto")
-      const expectedSignature = crypto
-        .createHmac("sha256", this.config.webhookSecret)
-        .update(payload, "utf8")
-        .digest("hex")
-
-      return crypto.timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(expectedSignature, "hex"))
+      const paymentIntent = await this.stripe.paymentIntents.create({
+        amount,
+        currency,
+        metadata: metadata || {},
+      })
+      return paymentIntent
     } catch (error) {
-      console.error("Stripe webhook verification error:", error)
-      return false
+      console.error("Stripe payment intent error:", error)
+      throw error
+    }
+  }
+
+  async confirmPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+    try {
+      const paymentIntent = await this.stripe.paymentIntents.confirm(paymentIntentId)
+      return paymentIntent
+    } catch (error) {
+      console.error("Stripe payment confirmation error:", error)
+      throw error
+    }
+  }
+
+  async constructWebhookEvent(payload: string | Buffer, signature: string): Promise<Stripe.Event> {
+    try {
+      const event = this.stripe.webhooks.constructEvent(payload, signature, this.config.webhookSecret)
+      return event
+    } catch (error) {
+      console.error("Stripe webhook error:", error)
+      throw error
+    }
+  }
+
+  async handleWebhook(event: Stripe.Event): Promise<any> {
+    switch (event.type) {
+      case "checkout.session.completed":
+        const session = event.data.object as Stripe.Checkout.Session
+        return { type: "payment_success", session }
+
+      case "payment_intent.succeeded":
+        const paymentIntent = event.data.object as Stripe.PaymentIntent
+        return { type: "payment_confirmed", paymentIntent }
+
+      case "payment_intent.payment_failed":
+        const failedPayment = event.data.object as Stripe.PaymentIntent
+        return { type: "payment_failed", paymentIntent: failedPayment }
+
+      default:
+        return { type: "unhandled", event }
     }
   }
 }

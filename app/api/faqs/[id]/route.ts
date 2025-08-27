@@ -1,8 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase"
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const supabase = getSupabaseClient()
+    if (!supabase) {
+      return NextResponse.json({ error: "Database connection unavailable" }, { status: 503 })
+    }
     const body = await request.json()
     const { question_en, question_ne, answer_en, answer_ne, page_id, category, order_index, is_active } = body
 
@@ -37,6 +41,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const supabase = getSupabaseClient()
+    if (!supabase) {
+      return NextResponse.json({ error: "Database connection unavailable" }, { status: 503 })
+    }
     const { error } = await supabase.from("faqs").delete().eq("id", params.id)
 
     if (error) {

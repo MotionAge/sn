@@ -1,19 +1,32 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, Calendar, DollarSign, BookOpen, FileText, ImageIcon, Globe, Settings } from "lucide-react"
-import { createServerSupabaseClient } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase"
 import Link from "next/link"
 
 async function getDashboardStats() {
-  const supabase = createServerSupabaseClient()
+  const supabase = createClient()
+  if (!supabase) throw new Error("Supabase client is null")
 
   try {
+    // Get member count
     const { count: memberCount } = await supabase.from("members").select("*", { count: "exact", head: true })
+
+    // Get upcoming events count
     const { count: eventCount } = await supabase
       .from("events")
       .select("*", { count: "exact", head: true })
       .gte("event_date", new Date().toISOString())
-    const { data: donations } = await supabase.from("donations").select("amount").eq("status", "completed")
-    const totalDonations = donations?.reduce((sum, d) => sum + d.amount, 0) || 0
+
+    // Get total donations
+    const { data: donations } = await supabase
+      .from("donations")
+      .select("amount")
+      .eq("status", "completed")
+
+    const totalDonations =
+      ((donations as { amount: number }[] | null)?.reduce((sum, donation) => sum + donation.amount, 0)) || 0
+
+    // Get library items count
     const { count: libraryCount } = await supabase.from("library_items").select("*", { count: "exact", head: true })
 
     return {
@@ -23,43 +36,76 @@ async function getDashboardStats() {
       libraryCount: libraryCount || 0,
     }
   } catch (error) {
-    console.error(error)
-    return { memberCount: 0, eventCount: 0, totalDonations: 0, libraryCount: 0 }
+    console.error("Error fetching dashboard stats:", error)
+    return {
+      memberCount: 0,
+      eventCount: 0,
+      totalDonations: 0,
+      libraryCount: 0,
+    }
   }
 }
 
 async function getRecentActivity() {
-  const supabase = createServerSupabaseClient()
+  const supabase = createClient()
+  if (!supabase) throw new Error("Supabase client is null")
 
   try {
-    const { data: recentMembers } = await supabase
+    interface Member {
+      name: string
+      created_at: string
+    }
+
+    interface Event {
+      title: string
+      updated_at: string
+    }
+
+    interface Activity {
+      action: string
+      time: string
+      user: string
+    }
+
+    // Get recent members
+    const { data: recentMembersRaw } = await supabase
       .from("members")
       .select("name, created_at")
       .order("created_at", { ascending: false })
       .limit(3)
 
-    const { data: recentEvents } = await supabase
+    const recentMembers = recentMembersRaw as Member[] | null
+
+    // Get recent events
+    const { data: recentEventsRaw } = await supabase
       .from("events")
       .select("title, updated_at")
       .order("updated_at", { ascending: false })
       .limit(2)
 
-    const activities = [
-      ...(recentMembers?.map((m) => ({
-        action: `New member registered: ${m.name}`,
-        time: new Date(m.created_at).toLocaleDateString(),
+    const recentEvents = recentEventsRaw as Event[] | null
+
+    const activities: Activity[] = []
+
+    recentMembers?.forEach((member) => {
+      activities.push({
+        action: `New member registered: ${member.name}`,
+        time: new Date(member.created_at).toLocaleDateString(),
         user: "System",
-      })) || []),
-      ...(recentEvents?.map((e) => ({
-        action: `Event updated: ${e.title}`,
-        time: new Date(e.updated_at).toLocaleDateString(),
+      })
+    })
+
+    recentEvents?.forEach((event) => {
+      activities.push({
+        action: `Event updated: ${event.title}`,
+        time: new Date(event.updated_at).toLocaleDateString(),
         user: "Admin",
-      })) || []),
-    ]
+      })
+    })
 
     return activities.slice(0, 5)
   } catch (error) {
-    console.error(error)
+    console.error("Error fetching recent activity:", error)
     return []
   }
 }

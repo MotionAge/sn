@@ -1,137 +1,223 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { PaymentManager, type PaymentMethod } from "@/lib/payment-manager"
+import { paymentManager } from "@/lib/payment-manager"
 import { createServerSupabaseClient } from "@/lib/supabase"
+import { emailService } from "@/lib/email-service"
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { orderId, method, verificationData } = body
+    const { gateway, transactionId, ...additionalData } = body
 
-    if (!orderId || !method) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    if (!gateway || !transactionId) {
+      return NextResponse.json({ error: "Missing required fields: gateway, transactionId" }, { status: 400 })
     }
 
-    const supabase = createServerSupabaseClient()
+    const result = await paymentManager.verifyPayment(gateway, transactionId, additionalData)
 
-    // Get payment record
-    const { data: payment, error: fetchError } = await supabase.from("payments").select("*").eq("id", orderId).single()
+    if (result.success) {
+      const supabase = createServerSupabaseClient()
 
-    if (fetchError || !payment) {
-      return NextResponse.json({ error: "Payment not found" }, { status: 404 })
-    }
+      // Get payment details
+      const { data: payment } = await supabase.from("payments").select("*").eq("id", transactionId).single()
 
-    // Verify payment with gateway
-    const paymentManager = new PaymentManager()
-    const verification = await paymentManager.verifyPayment(method as PaymentMethod, verificationData)
+      if (payment) {
+        // Update payment status
+        await supabase
+          .from("payments")
+          .update({
+            status: "completed",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", transactionId)
 
-    if (verification.verified) {
-      // Update payment status to completed
-      const { error: updateError } = await supabase
-        .from("payments")
-        .update({
-          status: "completed",
-          transaction_id: verification.transactionId,
-          verified_at: new Date().toISOString(),
-        })
-        .eq("id", orderId)
+        // Update related records based on reference type
+        if (payment.reference_type === "donation") {
+          await supabase
+            .from("donations")
+            .update({
+              payment_status: "completed",
+              payment_verified_at: new Date().toISOString(),
+            })
+            .eq("id", payment.reference_id)
 
-      if (updateError) {
-        console.error("Database update error:", updateError)
-        return NextResponse.json({ error: "Failed to update payment status" }, { status: 500 })
-      }
+          // Send donation confirmation email
+          if (payment.customer_email) {
+            const { data: donation } = await supabase
+              .from("donations")
+              .select("*")
+              .eq("id", payment.reference_id)
+              .single()
 
-      // If it's a membership payment, create member record
-      if (payment.type === "membership") {
-        const { error: memberError } = await supabase.from("members").insert({
-          name: payment.customer_name,
-          email: payment.customer_email,
-          phone: payment.customer_phone,
-          membership_type: "regular",
-          status: "pending",
-          payment_id: orderId,
-          created_at: new Date().toISOString(),
-        })
+            if (donation) {
+              await emailService.sendEmail({
+                to: payment.customer_email,
+                template: "donation-confirmation",
+                templateData: {
+                  donorName: payment.customer_name,
+                  amount: payment.amount,
+                  currency: payment.currency,
+                  receiptNumber: donation.donation_id,
+                  donationDate: payment.completed_at,
+                  paymentMethod: payment.payment_gateway,
+                  purpose: donation.purpose,
+                  message: donation.message,
+                },
+                referenceType: "donation",
+                referenceId: payment.reference_id,
+              })
 
-        if (memberError) {
-          console.error("Member creation error:", memberError)
+              // Generate donation receipt PDF
+              await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/pdf/generate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  type: "donation-receipt",
+                  data: {
+                    receiptNumber: donation.donation_id,
+                    donorName: payment.customer_name,
+                    amount: payment.amount,
+                    currency: payment.currency,
+                    donationDate: new Date(payment.completed_at),
+                    paymentMethod: payment.payment_gateway,
+                    purpose: donation.purpose,
+                    transactionId: payment.gateway_transaction_id,
+                    donationId: payment.reference_id,
+                  },
+                }),
+              })
+            }
+          }
+        } else if (payment.reference_type === "membership") {
+          await supabase
+            .from("members")
+            .update({
+              payment_status: "completed",
+              membership_status: "active",
+              payment_verified_at: new Date().toISOString(),
+            })
+            .eq("id", payment.reference_id)
+
+          // Send membership welcome email
+          if (payment.customer_email) {
+            const { data: member } = await supabase.from("members").select("*").eq("id", payment.reference_id).single()
+
+            if (member) {
+              await emailService.sendEmail({
+                to: payment.customer_email,
+                template: "membership-welcome",
+                templateData: {
+                  fullName: member.full_name,
+                  memberId: member.member_id,
+                  membershipType: member.membership_type,
+                  joinDate: member.join_date,
+                  expiryDate: member.expiry_date,
+                },
+                referenceType: "membership",
+                referenceId: payment.reference_id,
+              })
+
+              // Generate membership certificate
+              await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/pdf/generate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  type: "certificate",
+                  data: {
+                    serialNumber: `CERT-${member.member_id}`,
+                    certificateType: "membership",
+                    recipientName: member.full_name,
+                    membershipType: member.membership_type,
+                    issueDate: new Date(),
+                    validUntil: member.expiry_date ? new Date(member.expiry_date) : null,
+                    memberId: member.id,
+                  },
+                }),
+              })
+            }
+          }
+        } else if (payment.reference_type === "event_registration") {
+          await supabase
+            .from("event_registrations")
+            .update({
+              payment_status: "completed",
+              registration_status: "confirmed",
+            })
+            .eq("id", payment.reference_id)
+
+          // Send event registration confirmation email
+          if (payment.customer_email) {
+            const { data: registration } = await supabase
+              .from("event_registrations")
+              .select(`
+                *,
+                events (
+                  title,
+                  event_date,
+                  start_time,
+                  end_time,
+                  venue,
+                  organizer_email,
+                  organizer_phone
+                )
+              `)
+              .eq("id", payment.reference_id)
+              .single()
+
+            if (registration && registration.events) {
+              await emailService.sendEmail({
+                to: payment.customer_email,
+                template: "event-registration",
+                templateData: {
+                  participantName: registration.participant_name,
+                  eventTitle: registration.events.title,
+                  eventDate: registration.events.event_date,
+                  startTime: registration.events.start_time,
+                  endTime: registration.events.end_time,
+                  venue: registration.events.venue,
+                  registrationId: registration.registration_id,
+                  registrationFee: registration.registration_fee,
+                  currency: payment.currency,
+                  specialRequests: registration.special_requests,
+                  contactEmail: registration.events.organizer_email,
+                  contactPhone: registration.events.organizer_phone,
+                },
+                referenceType: "event_registration",
+                referenceId: payment.reference_id,
+              })
+            }
+          }
+        }
+
+        // Send general payment success email
+        if (payment.customer_email) {
+          await emailService.sendEmail({
+            to: payment.customer_email,
+            template: "payment-success",
+            templateData: {
+              customerName: payment.customer_name,
+              amount: payment.amount,
+              currency: payment.currency,
+              paymentId: payment.payment_id,
+              transactionId: payment.gateway_transaction_id,
+              paymentMethod: payment.payment_gateway,
+              paymentDate: payment.completed_at,
+              description: payment.description,
+            },
+            referenceType: payment.reference_type,
+            referenceId: payment.reference_id,
+          })
         }
       }
-
-      // If it's a donation, create donation record
-      if (payment.type === "donation") {
-        const { error: donationError } = await supabase.from("donations").insert({
-          donor_name: payment.customer_name,
-          donor_email: payment.customer_email,
-          donor_phone: payment.customer_phone,
-          amount: payment.amount,
-          currency: payment.currency,
-          payment_method: payment.method,
-          transaction_id: verification.transactionId,
-          status: "completed",
-          payment_id: orderId,
-          created_at: new Date().toISOString(),
-        })
-
-        if (donationError) {
-          console.error("Donation creation error:", donationError)
-        }
-      }
-
-      return NextResponse.json({
-        success: true,
-        verified: true,
-        transactionId: verification.transactionId,
-      })
-    } else {
-      // Update payment status to failed
-      await supabase.from("payments").update({ status: "failed" }).eq("id", orderId)
-
-      return NextResponse.json({
-        success: false,
-        verified: false,
-        error: "Payment verification failed",
-      })
-    }
-  } catch (error) {
-    console.error("Payment verification error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
-
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const orderId = searchParams.get("orderId")
-    const method = searchParams.get("method")
-
-    if (!orderId) {
-      return NextResponse.json({ error: "Order ID is required" }, { status: 400 })
-    }
-
-    const supabase = createServerSupabaseClient()
-
-    // Get payment status
-    const { data: payment, error } = await supabase.from("payments").select("*").eq("id", orderId).single()
-
-    if (error || !payment) {
-      return NextResponse.json({ error: "Payment not found" }, { status: 404 })
     }
 
     return NextResponse.json({
-      success: true,
-      payment: {
-        id: payment.id,
-        status: payment.status,
-        amount: payment.amount,
-        currency: payment.currency,
-        method: payment.method,
-        transactionId: payment.transaction_id,
-        createdAt: payment.created_at,
-        verifiedAt: payment.verified_at,
-      },
+      success: result.success,
+      transactionId: result.transactionId,
+      error: result.error,
+      data: result.data,
     })
   } catch (error) {
-    console.error("Payment status check error:", error)
+    console.error("Payment verification error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

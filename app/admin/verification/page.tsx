@@ -242,7 +242,7 @@ export default function VerificationPage() {
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">Certificate Type</Label>
                         <p className="text-sm">
-                          {result.data.certificate_type.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                          {(result.data.certificate_type as string).replace("_", " ").replace(/\b\w/g, (l: string) => l.toUpperCase())}
                         </p>
                       </div>
                       <div className="space-y-2">

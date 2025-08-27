@@ -1,12 +1,12 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, X, File, ImageIcon } from "lucide-react"
+import { Upload, X, File, ImageIcon, Video, Music, FileText } from "lucide-react"
+import Image from "next/image"
 
 interface FileUploadProps {
   onUpload: (fileData: any) => void
@@ -15,21 +15,41 @@ interface FileUploadProps {
   multiple?: boolean
   maxSize?: number // in MB
   className?: string
+  label?: string
+  currentFile?: string
 }
 
 export default function FileUpload({
   onUpload,
   folder = "general",
-  accept = "image/*,.pdf,.doc,.docx",
+  accept = "image/*,.pdf,.doc,.docx,audio/*,video/*",
   multiple = false,
-  maxSize = 10,
+  maxSize = 50,
   className = "",
+  label = "Upload File",
+  currentFile,
 }: FileUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState("")
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const getFileIcon = (type: string) => {
+    if (type.startsWith("image/")) return <ImageIcon className="h-5 w-5 text-blue-500" />
+    if (type.startsWith("video/")) return <Video className="h-5 w-5 text-purple-500" />
+    if (type.startsWith("audio/")) return <Music className="h-5 w-5 text-green-500" />
+    if (type.includes("pdf")) return <FileText className="h-5 w-5 text-red-500" />
+    return <File className="h-5 w-5 text-gray-500" />
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+  }
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
@@ -49,6 +69,13 @@ export default function FileUpload({
         const formData = new FormData()
         formData.append("file", file)
         formData.append("folder", folder)
+        formData.append(
+          "metadata",
+          JSON.stringify({
+            uploadedBy: "user",
+            category: folder,
+          }),
+        )
 
         const response = await fetch("/api/upload", {
           method: "POST",
@@ -84,10 +111,24 @@ export default function FileUpload({
     }
   }
 
-  const removeFile = (index: number) => {
-    const newFiles = uploadedFiles.filter((_, i) => i !== index)
-    setUploadedFiles(newFiles)
-    onUpload(multiple ? newFiles : null)
+  const removeFile = async (index: number) => {
+    const fileToRemove = uploadedFiles[index]
+
+    try {
+      // Delete from blob storage
+      await fetch("/api/upload", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pathname: fileToRemove.pathname }),
+      })
+
+      const newFiles = uploadedFiles.filter((_, i) => i !== index)
+      setUploadedFiles(newFiles)
+      onUpload(multiple ? newFiles : null)
+    } catch (error) {
+      console.error("Error removing file:", error)
+      setError("Failed to remove file")
+    }
   }
 
   return (
@@ -106,9 +147,11 @@ export default function FileUpload({
         <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
 
         <div className="space-y-2">
-          <p className="text-lg font-medium text-gray-700">{uploading ? "Uploading..." : "Choose files to upload"}</p>
+          <p className="text-lg font-medium text-gray-700">{uploading ? "Uploading..." : label}</p>
           <p className="text-sm text-gray-500">
             {accept.includes("image") && "Images, "}
+            {accept.includes("video") && "Videos, "}
+            {accept.includes("audio") && "Audio, "}
             {accept.includes(".pdf") && "PDFs, "}
             {accept.includes(".doc") && "Documents "}
             up to {maxSize}MB
@@ -133,6 +176,12 @@ export default function FileUpload({
         </Alert>
       )}
 
+      {currentFile && !uploadedFiles.length && (
+        <div className="p-3 bg-gray-50 rounded-lg">
+          <p className="text-sm text-gray-600">Current file: {currentFile}</p>
+        </div>
+      )}
+
       {uploadedFiles.length > 0 && (
         <div className="space-y-2">
           <h4 className="font-medium text-gray-700">Uploaded Files:</h4>
@@ -140,14 +189,21 @@ export default function FileUpload({
             {uploadedFiles.map((file, index) => (
               <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center space-x-3">
-                  {file.type.startsWith("image/") ? (
-                    <ImageIcon className="h-5 w-5 text-blue-500" />
-                  ) : (
-                    <File className="h-5 w-5 text-gray-500" />
-                  )}
-                  <div>
+                  {getFileIcon(file.type)}
+                  <div className="flex-1">
                     <p className="text-sm font-medium text-gray-700">{file.originalName}</p>
-                    <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                    <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                    {file.type.startsWith("image/") && (
+                      <div className="mt-2">
+                        <Image
+                          src={file.url || "/placeholder.svg"}
+                          alt={file.originalName}
+                          width={100}
+                          height={60}
+                          className="rounded object-cover"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
                 <Button
@@ -167,3 +223,5 @@ export default function FileUpload({
     </div>
   )
 }
+
+export { FileUpload }

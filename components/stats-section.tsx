@@ -1,92 +1,91 @@
-import { createClient, supabaseUrl, supabaseKey } from "@/lib/supabase"
-import { Users, Calendar, BookOpen, Globe } from "lucide-react"
+"use client"
 
-async function getStats() {
-  const supabase = createClient(supabaseUrl, supabaseKey)
+import { useState, useEffect } from "react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Users, Calendar, BookOpen, Heart } from "lucide-react"
+import { useTranslation } from "@/hooks/use-translation"
 
-  try {
-    // Get member count
-    const { count: memberCount } = await supabase
-      .from("members")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "approved")
-
-    // Get events count
-    const { count: eventCount } = await supabase.from("events").select("*", { count: "exact", head: true })
-
-    // Get library items count
-    const { count: libraryCount } = await supabase.from("library_items").select("*", { count: "exact", head: true })
-
-    // Get global presence count
-    const { count: globalCount } = await supabase.from("global_presence").select("*", { count: "exact", head: true })
-
-    return {
-      members: memberCount || 0,
-      events: eventCount || 0,
-      library: libraryCount || 0,
-      global: globalCount || 0,
-    }
-  } catch (error) {
-    console.error("Error fetching stats:", error)
-    return {
-      members: 0,
-      events: 0,
-      library: 0,
-      global: 0,
-    }
-  }
+interface Stats {
+  totalMembers: number
+  totalEvents: number
+  totalBlogs: number
+  totalDonations: number
 }
 
-export default async function StatsSection() {
-  const stats = await getStats()
+export default function StatsSection() {
+  const { language } = useTranslation()
+  const [stats, setStats] = useState<Stats>({
+    totalMembers: 0,
+    totalEvents: 0,
+    totalBlogs: 0,
+    totalDonations: 0,
+  })
+  const [hasError, setHasError] = useState(false)
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const response = await fetch("/api/stats")
+        if (response.ok) {
+          const data = await response.json()
+          setStats(data.data || stats)
+        } else if (response.status === 503) {
+          // Database unavailable
+          setHasError(true)
+        }
+      } catch (error) {
+        console.error("Error fetching stats:", error)
+        setHasError(true)
+      }
+    }
+
+    fetchStats()
+  }, [])
 
   const statsData = [
     {
       icon: Users,
-      value: stats.members,
-      label: "Active Members",
-      description: "Dedicated followers of Sanatan Dharma",
+      value: hasError ? "---" : stats.totalMembers.toLocaleString(),
+      label: "Members",
+      color: "text-blue-600",
     },
     {
       icon: Calendar,
-      value: stats.events,
-      label: "Events Organized",
-      description: "Cultural and educational programs",
+      value: hasError ? "---" : stats.totalEvents.toLocaleString(),
+      label: "Events",
+      color: "text-green-600",
     },
     {
       icon: BookOpen,
-      value: stats.library,
-      label: "Library Resources",
-      description: "Books, scriptures, and digital content",
+      value: hasError ? "---" : stats.totalBlogs.toLocaleString(),
+      label: "Blogs",
+      color: "text-purple-600",
     },
     {
-      icon: Globe,
-      value: stats.global,
-      label: "Global Presence",
-      description: "Countries with our community",
+      icon: Heart,
+      value: hasError ? "---" : `₹${stats.totalDonations.toLocaleString()}`,
+      label: "Donations",
+      color: "text-red-600",
     },
   ]
 
   return (
-    <section className="py-16 bg-gradient-to-r from-orange-50 to-red-50">
+    <section className="py-16 bg-white">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">Our Impact</h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Building a global community dedicated to preserving and promoting Sanatan Dharma values
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {statsData.map((stat, index) => (
-            <div key={index} className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-100 rounded-full mb-4">
-                <stat.icon className="w-8 h-8 text-orange-600" />
-              </div>
-              <div className="text-4xl font-bold text-gray-900 mb-2">{stat.value.toLocaleString()}</div>
-              <div className="text-xl font-semibold text-gray-800 mb-2">{stat.label}</div>
-              <p className="text-gray-600">{stat.description}</p>
-            </div>
+            <Card key={index} className="text-center hover:shadow-lg transition-shadow">
+              <CardContent className="p-6">
+                <stat.icon className={`h-12 w-12 mx-auto mb-4 ${stat.color}`} />
+                <div className="text-3xl font-bold text-gray-900 mb-2">{stat.value}</div>
+                <p className="text-gray-600">{stat.label}</p>
+                {hasError && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Data unavailable
+                  </p>
+                )}
+              </CardContent>
+            </Card>
           ))}
         </div>
       </div>

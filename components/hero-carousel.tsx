@@ -3,73 +3,80 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, AlertCircle } from "lucide-react"
 import { useTranslation } from "@/hooks/use-translation"
 
 interface CarouselSlide {
   id: string
   title_en: string
-  title_ne: string
   description_en: string
-  description_ne: string
   image_url: string
   cta_text_en?: string
-  cta_text_ne?: string
   cta_link?: string
 }
+
+const fallbackSlides: CarouselSlide[] = [
+  {
+    id: "1",
+    title_en: "Welcome to Sanatan Dharma Bikash Nepal",
+    description_en: "Preserving and promoting the eternal values of Sanatan Dharma",
+    image_url: "/placeholder.svg?height=600&width=1200&text=Hero+Image+1",
+    cta_text_en: "Learn More",
+    cta_link: "/about",
+  },
+  {
+    id: "2",
+    title_en: "Join Our Community",
+    description_en: "Connect with like-minded individuals on the spiritual journey",
+    image_url: "/placeholder.svg?height=600&width=1200&text=Hero+Image+2",
+    cta_text_en: "Join Now",
+    cta_link: "/membership/apply",
+  },
+  {
+    id: "3",
+    title_en: "Support Our Mission",
+    description_en: "Help us spread the teachings of Sanatan Dharma worldwide",
+    image_url: "/placeholder.svg?height=600&width=1200&text=Hero+Image+3",
+    cta_text_en: "Donate Now",
+    cta_link: "/donate",
+  },
+]
 
 export default function HeroCarousel() {
   const { language } = useTranslation()
   const [slides, setSlides] = useState<CarouselSlide[]>([])
   const [currentSlide, setCurrentSlide] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchSlides() {
       try {
+        setError(null)
         const response = await fetch("/api/carousel-slides")
-        if (response.ok) {
-          const data = await response.json()
-          setSlides(data.data || [])
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const contentType = response.headers.get("content-type")
+        if (!contentType || !contentType.includes("application/json")) {
+          throw new Error("Response is not JSON")
+        }
+
+        const result = await response.json()
+
+        if (result.success && result.data && result.data.length > 0) {
+          setSlides(result.data)
+        } else {
+          // Use fallback slides if no data or API error
+          console.warn("No carousel slides found, using fallback slides")
+          setSlides(fallbackSlides)
         }
       } catch (error) {
-        console.error("Error fetching carousel slides:", error)
-        // Fallback slides
-        setSlides([
-          {
-            id: "1",
-            title_en: "Welcome to Sanatan Dharma Bikash Nepal",
-            title_ne: "सनातन धर्म विकास नेपालमा स्वागत छ",
-            description_en: "Preserving and promoting the eternal values of Sanatan Dharma",
-            description_ne: "सनातन धर्मका शाश्वत मूल्यहरूको संरक्षण र प्रवर्धन",
-            image_url: "/placeholder.svg?height=600&width=1200&text=Hero+Image+1",
-            cta_text_en: "Learn More",
-            cta_text_ne: "थप जान्नुहोस्",
-            cta_link: "/about",
-          },
-          {
-            id: "2",
-            title_en: "Join Our Community",
-            title_ne: "हाम्रो समुदायमा सामेल हुनुहोस्",
-            description_en: "Connect with like-minded individuals on the spiritual journey",
-            description_ne: "आध्यात्मिक यात्रामा समान विचारधारा भएका व्यक्तिहरूसँग जोडिनुहोस्",
-            image_url: "/placeholder.svg?height=600&width=1200&text=Hero+Image+2",
-            cta_text_en: "Join Now",
-            cta_text_ne: "अहिले सामेल हुनुहोस्",
-            cta_link: "/membership/apply",
-          },
-          {
-            id: "3",
-            title_en: "Support Our Mission",
-            title_ne: "हाम्रो मिशनलाई सहयोग गर्नुहोस्",
-            description_en: "Help us spread the teachings of Sanatan Dharma worldwide",
-            description_ne: "सनातन धर्मका शिक्षाहरू विश्वभर फैलाउन हामीलाई सहयोग गर्नुहोस्",
-            image_url: "/placeholder.svg?height=600&width=1200&text=Hero+Image+3",
-            cta_text_en: "Donate Now",
-            cta_text_ne: "अहिले दान गर्नुहोस्",
-            cta_link: "/donate",
-          },
-        ])
+        console.warn("Error fetching carousel slides, using fallback:", error)
+        setSlides(fallbackSlides)
+        setError("Using default content - database unavailable")
       } finally {
         setIsLoading(false)
       }
@@ -98,7 +105,7 @@ export default function HeroCarousel() {
   if (isLoading) {
     return (
       <section className="relative h-[600px] bg-gradient-to-r from-orange-100 to-red-100 flex items-center justify-center">
-        <div className="animate-pulse text-orange-600">Loading...</div>
+        <div className="animate-pulse text-orange-600 text-lg">Loading...</div>
       </section>
     )
   }
@@ -107,17 +114,17 @@ export default function HeroCarousel() {
     return (
       <section className="relative h-[600px] bg-gradient-to-r from-orange-100 to-red-100 flex items-center justify-center">
         <div className="container mx-auto px-4 text-center">
+          <AlertCircle className="h-16 w-16 text-orange-600 mx-auto mb-4" />
           <h1 className="text-5xl font-bold text-orange-800 mb-4">
-            {language === "ne" ? "सनातन धर्म विकास नेपाल" : "Sanatan Dharma Bikash Nepal"}
+            Sanatan Dharma Bikash Nepal
           </h1>
           <p className="text-xl text-orange-700 mb-8">
-            {language === "ne"
-              ? "सनातन धर्मका शाश्वत मूल्यहरूको संरक्षण र प्रवर्धन"
-              : "Preserving and promoting the eternal values of Sanatan Dharma"}
+            Preserving and promoting the eternal values of Sanatan Dharma
           </p>
           <Button className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 text-lg">
-            {language === "ne" ? "थप जान्नुहोस्" : "Learn More"}
+            Learn More
           </Button>
+          {error && <p className="text-sm text-orange-600 mt-4">{error}</p>}
         </div>
       </section>
     )
@@ -127,10 +134,16 @@ export default function HeroCarousel() {
 
   return (
     <section className="relative h-[600px] overflow-hidden">
+      {error && (
+        <div className="absolute top-4 right-4 z-50 bg-yellow-100 border border-yellow-400 text-yellow-700 px-3 py-2 rounded text-sm">
+          Using default content
+        </div>
+      )}
+
       <div className="relative w-full h-full">
         <Image
-          src={currentSlideData.image_url || "/placeholder.svg"}
-          alt={language === "ne" ? currentSlideData.title_ne : currentSlideData.title_en}
+          src={currentSlideData.image_url || "/placeholder.svg?height=600&width=1200&text=Hero+Image"}
+          alt={currentSlideData.title_en}
           fill
           className="object-cover"
           priority
@@ -141,15 +154,15 @@ export default function HeroCarousel() {
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="container mx-auto px-4 text-center text-white">
           <h1 className="text-5xl font-bold mb-4">
-            {language === "ne" ? currentSlideData.title_ne : currentSlideData.title_en}
+            {currentSlideData.title_en}
           </h1>
           <p className="text-xl mb-8 max-w-3xl mx-auto">
-            {language === "ne" ? currentSlideData.description_ne : currentSlideData.description_en}
+            {currentSlideData.description_en}
           </p>
           {currentSlideData.cta_link && (
             <Button asChild className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 text-lg">
               <a href={currentSlideData.cta_link}>
-                {language === "ne" ? currentSlideData.cta_text_ne : currentSlideData.cta_text_en}
+                {currentSlideData.cta_text_en}
               </a>
             </Button>
           )}

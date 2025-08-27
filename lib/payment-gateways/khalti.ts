@@ -1,10 +1,10 @@
-interface KhaltiConfig {
+export interface KhaltiConfig {
   publicKey: string
   secretKey: string
   environment: "sandbox" | "production"
 }
 
-interface KhaltiPaymentData {
+export interface KhaltiPaymentData {
   return_url: string
   website_url: string
   amount: number
@@ -17,22 +17,16 @@ interface KhaltiPaymentData {
   }
 }
 
-export class KhaltiPayment {
+export class KhaltiGateway {
   private config: KhaltiConfig
   private baseUrl: string
 
-  constructor() {
-    this.config = {
-      publicKey: process.env.KHALTI_PUBLIC_KEY || "",
-      secretKey: process.env.KHALTI_SECRET_KEY || "",
-      environment: (process.env.KHALTI_ENVIRONMENT as "sandbox" | "production") || "sandbox",
-    }
-
-    this.baseUrl =
-      this.config.environment === "production" ? "https://khalti.com/api/v2" : "https://a.khalti.com/api/v2"
+  constructor(config: KhaltiConfig) {
+    this.config = config
+    this.baseUrl = config.environment === "production" ? "https://khalti.com/api/v2" : "https://a.khalti.com/api/v2"
   }
 
-  async initiatePayment(paymentData: KhaltiPaymentData): Promise<{ payment_url: string; pidx: string } | null> {
+  async initiatePayment(paymentData: KhaltiPaymentData): Promise<any> {
     try {
       const response = await fetch(`${this.baseUrl}/epayment/initiate/`, {
         method: "POST",
@@ -43,23 +37,19 @@ export class KhaltiPayment {
         body: JSON.stringify(paymentData),
       })
 
-      const result = await response.json()
-
-      if (result.payment_url && result.pidx) {
-        return {
-          payment_url: result.payment_url,
-          pidx: result.pidx,
-        }
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || "Payment initiation failed")
       }
 
-      return null
+      return await response.json()
     } catch (error) {
       console.error("Khalti initiation error:", error)
-      return null
+      throw error
     }
   }
 
-  async verifyPayment(pidx: string): Promise<{ status: string; transaction_id?: string }> {
+  async verifyPayment(pidx: string): Promise<any> {
     try {
       const response = await fetch(`${this.baseUrl}/epayment/lookup/`, {
         method: "POST",
@@ -70,15 +60,15 @@ export class KhaltiPayment {
         body: JSON.stringify({ pidx }),
       })
 
-      const result = await response.json()
-
-      return {
-        status: result.status,
-        transaction_id: result.transaction_id,
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || "Payment verification failed")
       }
+
+      return await response.json()
     } catch (error) {
       console.error("Khalti verification error:", error)
-      return { status: "failed" }
+      throw error
     }
   }
 }
